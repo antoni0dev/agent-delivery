@@ -350,7 +350,7 @@
     },
     {
       "path": "dist/runtime/core.js",
-      "digest": "0b3104f9c55d5ffb65b6ce4051c80580f6734df75135092ef8ba7cd8f2e7ea59",
+      "digest": "0d13ffc7e8b91fb5b97e731737b3e9fcb99ce01ce34c356b137f2af9b4d3ee10",
       "size": 2568
     },
     {
@@ -445,8 +445,8 @@
     },
     {
       "path": "docs/private-intake.md",
-      "digest": "9ba24cc603d6f4cb4233da4065579e68c2164fe64c0267e3a8af801982dd68a6",
-      "size": 3415
+      "digest": "8b6d0a28fe5f0b83ff8aadbaa1b7764b4f13811b9d83e6e4ab542d536e1de604",
+      "size": 3443
     },
     {
       "path": "knowledge/audit.json",
@@ -545,8 +545,8 @@
     },
     {
       "path": "README.md",
-      "digest": "e28b91b8acb8fbe1f0c98ae85013c46d8e427511f0f85b6bec6e9da398071766",
-      "size": 8275
+      "digest": "fc87deb27e010c28d39dcffdc9caeede5658486e8ffb261d1c21985d20dddded",
+      "size": 8459
     },
     {
       "path": "scripts/ingest-sources.py",
@@ -725,7 +725,7 @@
     },
     {
       "path": "src/runtime/core.ts",
-      "digest": "ba2f09996aefa6315408298e2ebcc669177fe2082d751e28719a4407a4af50c9",
+      "digest": "bbd6c7437f5e6ec7a7b94c9d1c40b933b76dd2341a01d561650e915775eade97",
       "size": 3157
     },
     {
@@ -840,7 +840,7 @@
     },
     {
       "path": "test/runtime-adapters.test.ts",
-      "digest": "fbbc4abc34500ed346b08d0589009477abde1b4458752249c08427b6935da56d",
+      "digest": "ddf344d7ed4015cc5d09d7462fe3dd3f5dd34fe8eadb422852203462df1aae0d",
       "size": 15098
     },
     {
@@ -864,5 +864,5 @@
       "size": 385
     }
   ],
-  "manifestDigest": "2a41564563fa221208e14a364968798d2fd39129c287accc9048144732c094f3"
+  "manifestDigest": "a583f5b8d5dee290e5b9d27ba70fefb2b1025692ef4d63b7df101fabba9d7605"
 }

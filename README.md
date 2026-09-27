@@ -20,11 +20,11 @@ The release includes 58 engineering reference cards and an audited source-covera
 - Environment or command-backed references for destination credentials
 - Approved source eligibility for every export, plus reviewed complete knowledge coverage for a release export or activation
 
-Runtime role models are fixed in `src/runtime/core.ts`. Profiles do not silently substitute another model:
+Runtime role models are fixed in `src/runtime/core.ts`. Profiles do not silently substitute another model. Codex planning and independent plan challenge use Astra at high effort. Model changes invalidate previous conformance and behavior proofs; rerun both before activation:
 
 | Profile | Planning | Implementation | Review and browser verification |
 |---|---|---|---|
-| `codex` | `gpt-5.6-sol` | `gpt-5.6-sol` | `gpt-5.6-sol` |
+| `codex` | `gpt-6-astra` at high effort | `gpt-5.6-sol` | `gpt-5.6-sol` |
 | `claude-code` | `claude-fable-5-1` | `claude-opus-5-5` | `claude-opus-5-5` |
 | `cursor` | `gpt-5.6-sol` with `claude-fable-5-1` plan challenge | `gpt-5.6-sol` | `gpt-5.6-sol` |
 

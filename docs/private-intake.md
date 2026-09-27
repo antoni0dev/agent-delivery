@@ -28,6 +28,6 @@ Use the installed `shape-linear-ticket` skill in a focused discussion session. S
 
 # Rollout boundary
 
-Install and configure while intake is inactive. Revalidate capability and knowledge behavior after model or release changes; old proofs cannot be relabeled. The current Codex profile uses the explicitly selected Sol model for every role, with high effort for planning and independent review. Other profiles remain separately gated and are not fallback providers.
+Install and configure while intake is inactive. Revalidate capability and knowledge behavior after model or release changes; old proofs cannot be relabeled. The current Codex profile uses Astra at high effort for planning and independent plan challenge, and Sol for implementation, code review and browser verification. Other profiles remain separately gated and are not fallback providers.
 
 Before the first live run, reconcile legacy owners, confirm a dedicated non-production QA identity and the ticket's required journeys, verify strict required checks and destination authority, then activate for the selected ticket. Automatic intake begins with a baseline, not a backlog sweep. Existing company work remains with its existing owner until deliberately handed off.

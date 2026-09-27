@@ -76,8 +76,8 @@ test("runtime profiles are immutable and pin every role to its required model", 
     "reviewer",
     "browserVerifier",
   ]);
-  assert.equal(runtimeProfiles.codex.planner.model, "gpt-5.6-sol");
-  assert.equal(runtimeProfiles.codex.planCritic.model, "gpt-5.6-sol");
+  assert.equal(runtimeProfiles.codex.planner.model, "gpt-6-astra");
+  assert.equal(runtimeProfiles.codex.planCritic.model, "gpt-6-astra");
   assert.equal(runtimeProfiles.codex.implementer.model, "gpt-5.6-sol");
   assert.equal(runtimeProfiles["claude-code"].planner.model, "claude-fable-5-1");
   assert.equal(runtimeProfiles["claude-code"].implementer.model, "claude-opus-5-5");

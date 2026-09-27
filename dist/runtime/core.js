@@ -10,8 +10,8 @@ export const effortNames = ["medium", "high"];
 const profile = ({ model, effort, complexOrMoneyEffort = effort, readOnly, }) => Object.freeze({ model, effort, complexOrMoneyEffort, readOnly, freshContext: true });
 export const runtimeProfiles = Object.freeze({
     codex: Object.freeze({
-        planner: profile({ model: "gpt-5.6-sol", effort: "high", readOnly: true }),
-        planCritic: profile({ model: "gpt-5.6-sol", effort: "high", readOnly: true }),
+        planner: profile({ model: "gpt-6-astra", effort: "high", readOnly: true }),
+        planCritic: profile({ model: "gpt-6-astra", effort: "high", readOnly: true }),
         implementer: profile({
             model: "gpt-5.6-sol",
             effort: "medium",

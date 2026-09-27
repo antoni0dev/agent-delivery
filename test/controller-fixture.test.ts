@@ -119,6 +119,7 @@ export function createControllerFixture({
   relatedPullRequests = [],
   intakeIntervalMs,
   intake,
+  preparation,
 }: {
   profile?: WorkspaceConfig["intakeRuntimeProfile"];
   planForIssue?: (issueId: string) => Plan;
@@ -129,6 +130,7 @@ export function createControllerFixture({
   relatedPullRequests?: Pull[];
   intakeIntervalMs?: number;
   intake?: WorkspaceConfig["linear"]["intake"];
+  preparation?: WorkspaceConfig["projects"][number]["preparation"];
 } = {}): ControllerFixture {
   const root = mkdtempSync(join(tmpdir(), "controller-lifecycle-"));
   const projectRoot = join(root, "repository");
@@ -169,6 +171,7 @@ export function createControllerFixture({
     projects: [
       {
         id: "project",
+        ...(preparation === undefined ? {} : { preparation }),
         root: projectRoot,
         repository: "example/controller-fixture",
         remote: "git@github.com:example/controller-fixture.git",

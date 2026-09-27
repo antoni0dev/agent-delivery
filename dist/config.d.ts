@@ -17,6 +17,10 @@ declare const projectSchema: z.ZodObject<{
         executable: z.ZodString;
         args: z.ZodArray<z.ZodString>;
     }, z.core.$strict>>;
+    preparation: z.ZodOptional<z.ZodObject<{
+        executable: z.ZodString;
+        args: z.ZodArray<z.ZodString>;
+    }, z.core.$strict>>;
     environment: z.ZodObject<{
         name: z.ZodString;
         production: z.ZodLiteral<false>;
@@ -139,6 +143,10 @@ export declare const workspaceConfigSchema: z.ZodObject<{
         projectIds: z.ZodArray<z.ZodString>;
         instructions: z.ZodArray<z.ZodString>;
         commands: z.ZodRecord<z.ZodString, z.ZodObject<{
+            executable: z.ZodString;
+            args: z.ZodArray<z.ZodString>;
+        }, z.core.$strict>>;
+        preparation: z.ZodOptional<z.ZodObject<{
             executable: z.ZodString;
             args: z.ZodArray<z.ZodString>;
         }, z.core.$strict>>;

@@ -38,6 +38,7 @@ Fill the template using the destination repository and team policy:
 | `teamIds`, `projectIds` | Tracker UUIDs defining scope; an empty project list permits the configured teams' projects |
 | `instructions` | Repository-relative instruction files to include in planning |
 | `commands` | Real executable and argument arrays for this repository's checks |
+| `preparation` | Optional idempotent, lockfile-preserving setup command for a fresh worktree |
 | `environment` | Dedicated non-production QA environment, authentication and allowed mutations |
 | `release` | Development target, merge method, exact required check names and strict current-base policy |
 | `authority` | Recorded grant reference and only the actions the destination permits |
@@ -59,6 +60,12 @@ For the label-free workflow, add this inside `linear`:
 Keep automatic intake disabled for the first explicit pilot. Later, setting `automaticOthers` to true allows newly observed, in-scope assignments created by other people to enter the pipeline. The first scan records the backlog without starting it. Self-created tickets and unknown creators never auto-start. Keep the template's `readyLabel` field for compatibility; it is unused in private mode.
 
 Changing configuration after activation invalidates its binding. Pause, drain and explicitly reactivate after validation. A changed configuration establishes a fresh intake baseline. See [private intake](private-intake.md) for manual reservations and polling limits.
+
+## Prepare isolated worktrees
+
+Configure `projects[].preparation` when the repository needs installed dependencies. For an npm repository this may be `{ "executable": "npm", "args": ["ci"] }`; use the actual pinned package manager and immutable/frozen-lockfile option for other repositories. Monorepos may need a destination-private bootstrap script that selects the correct subdirectory and toolchain. Do not copy credentials into the worktree or change dependency versions during preparation.
+
+Preparation runs under the host's shared heavy-work lock before implementation, QA authorship and verification. It is a host command, not an LLM-selected action or acceptance evidence. It must be safe to rerun. A failure blocks the task before model implementation and does not consume a code-repair round. Changing this command changes the configuration binding, so pause and replan already accepted work before resuming.
 
 ## Adapt checks and browser QA
 

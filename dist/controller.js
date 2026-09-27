@@ -255,6 +255,29 @@ export class Controller {
                 this.heavyLocks.set(id, heavy);
             }
             onAssigned?.(id);
+            const preparation = this.project(task).preparation;
+            if (preparation !== undefined && (role === "implementer" || role === "browserVerifier")) {
+                const preparationLock = heavy ?? this.services.acquireHeavy({ token: id });
+                try {
+                    const prepared = await this.services.command({
+                        command: preparation,
+                        cwd,
+                        artifactDirectory: join(this.input.config.stateDirectory, "preparation", task.id, id),
+                        requireStructuredReport: false,
+                        signal: abort.signal,
+                        onStarted: (pid) => {
+                            this.input.store.started({ id, pid });
+                            preparationLock.started(pid);
+                        },
+                    });
+                    if (!prepared.passed)
+                        throw new DeliveryError("Workspace preparation failed; restore the configured setup command before resuming");
+                }
+                finally {
+                    if (heavy === undefined)
+                        preparationLock.release();
+                }
+            }
             const resolvedPrompt = typeof prompt === "string" ? prompt : await prompt({ id, signal: abort.signal });
             const selectedRole = selectRuntimeRole({ profile: task.profile, role, complexOrMoney });
             this.input.store.event({

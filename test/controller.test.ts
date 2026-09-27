@@ -411,3 +411,41 @@ test("unit-only work receives independent QA authorship before acceptance", asyn
   assert.equal(writers.length, 2);
   assert.notEqual(writers[0]?.invocationId, writers[1]?.invocationId);
 });
+
+test("workspace preparation runs before writers and required verification", async (context) => {
+  const fixture = createControllerFixture({
+    preparation: { executable: "setup", args: ["setup"] },
+  });
+  context.after(fixture.cleanup);
+  fixture.setRuntimeGate(async (input) => {
+    if (input.role === "implementer" || input.role === "browserVerifier")
+      assert.ok(fixture.commandCalls.some((call) => call.command.args[0] === "setup"));
+  });
+  await fixture.controller.run({
+    profile: "codex",
+    issueId: fixture.issue.id,
+    projectId: "project",
+  });
+  assert.equal(fixture.store.findByIssue(fixture.issue.id)?.state, "completed");
+  assert.equal(fixture.commandCalls.filter((call) => call.command.args[0] === "setup").length, 3);
+});
+
+test("preparation failure blocks before implementation without consuming code repairs", async (context) => {
+  const fixture = createControllerFixture({
+    preparation: { executable: "setup", args: ["setup"] },
+    failFirstCommand: true,
+  });
+  context.after(fixture.cleanup);
+  await fixture.controller.run({
+    profile: "codex",
+    issueId: fixture.issue.id,
+    projectId: "project",
+  });
+  const task = fixture.store.findByIssue(fixture.issue.id);
+  assert.equal(task?.state, "blocked");
+  assert.match(task?.reason ?? "", /preparation failed/);
+  assert.equal(task?.repair_rounds, 0);
+  assert.equal(fixture.runtimeCalls.filter((call) => call.role === "implementer").length, 0);
+  assert.equal(fixture.store.runningInvocations().length, 0);
+  assert.equal(fixture.githubCalls.merged.length, 0);
+});

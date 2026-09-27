@@ -16,6 +16,7 @@ const projectSchema = z
     projectIds: z.array(z.string()),
     instructions: z.array(z.string()),
     commands: z.record(z.string(), commandSchema),
+    preparation: commandSchema.optional(),
     environment: z
         .object({
         name: z.string().min(1),

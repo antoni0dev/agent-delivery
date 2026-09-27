@@ -55,13 +55,13 @@
     },
     {
       "path": "dist/config.d.ts",
-      "digest": "eaa6c545d2a137a75b99a18ecc80e1f69e9ed15687ea2dab8a964b375f3cf90d",
-      "size": 7229
+      "digest": "187e97c90823a26f26599b2141b3fc0af5eb50d4afa24e0463c384d0651e34b1",
+      "size": 7529
     },
     {
       "path": "dist/config.js",
-      "digest": "a25c39fd8c94781fa305f9d75df3f102f41e212a334893f31aa3f09a1eba34c1",
-      "size": 9900
+      "digest": "a0b23bbd0b64d987ee470b2cd29d136b1023b9d1dc2f6165193b82bc8213c587",
+      "size": 9943
     },
     {
       "path": "dist/conformance.d.ts",
@@ -80,8 +80,8 @@
     },
     {
       "path": "dist/controller.js",
-      "digest": "9834e58db71489ffc89afc6b5af9770d3b838a006dbdb729655144d694edc216",
-      "size": 80583
+      "digest": "e13d7c4e14d9a743a7774e3ecc6acbd73f28e6b2bad1e27c6cad84288c07d233",
+      "size": 81790
     },
     {
       "path": "dist/distribution/export.d.ts",
@@ -415,8 +415,8 @@
     },
     {
       "path": "docs/adapting-a-repository.md",
-      "digest": "7797639c2a5c7c6988746b8bce99a75bb2324ff8b2d02d15298bd7ddaf4d9034",
-      "size": 10588
+      "digest": "7a2d9dd15d848096b53806fb8ef057330c4110fefceefce033bda0a6e385c854",
+      "size": 11604
     },
     {
       "path": "docs/architecture.md",
@@ -580,8 +580,8 @@
     },
     {
       "path": "src/config.ts",
-      "digest": "ebe424595c82d1383c71ef45e5b1bf2ba4eec5420ec7d46195da06ac758b7941",
-      "size": 9765
+      "digest": "90a6bfb08ec983cd7febdbf37f66a81de5e114179bb883304adce3ceae3b656e",
+      "size": 9808
     },
     {
       "path": "src/conformance.ts",
@@ -590,8 +590,8 @@
     },
     {
       "path": "src/controller.ts",
-      "digest": "de4bec73b48287585b13c7885545c8269ac9004c7b709d90c0bc77242f3c8864",
-      "size": 76541
+      "digest": "4b6a5b6b8b3d9f357c1a3d90e89b54a1adeccf4a8d47ba88df2598a1254c5ebb",
+      "size": 77523
     },
     {
       "path": "src/distribution/export.ts",
@@ -775,8 +775,8 @@
     },
     {
       "path": "test/controller-fixture.test.ts",
-      "digest": "050dbe4149b663b33426ddde675fe9b51186516fb3fe65e9eda01bdf39dfc5fe",
-      "size": 18942
+      "digest": "ee30d5e16157257a970a1c15b1b6dc758a43a47d12649d29c24349f0c6511b05",
+      "size": 19088
     },
     {
       "path": "test/controller-routing.test.ts",
@@ -790,8 +790,8 @@
     },
     {
       "path": "test/controller.test.ts",
-      "digest": "d3e6b5d9d950227b3e4c76ac1ce8231adba6ab568f26fb06b71300fc26e00504",
-      "size": 13535
+      "digest": "77396109a81c8ecb4d95c621638baf6323dd0d36bd47e03563e4dc4945d6d74e",
+      "size": 15101
     },
     {
       "path": "test/distribution.test.ts",
@@ -864,5 +864,5 @@
       "size": 385
     }
   ],
-  "manifestDigest": "9c7beda45270a273cf578b5ca978606084fe3737e376b907b3894b2de75837ee"
+  "manifestDigest": "ab07f85a5c787cc4dee1ac5c10698e0be4f76eb96fc19fa2aef8ebf6d4b59f19"
 }

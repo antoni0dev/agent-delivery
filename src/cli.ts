@@ -27,6 +27,7 @@ import {
 import { DeliveryError, type Profile, profiles } from "./domain.js";
 import {
   activateLaunchAgent,
+  activateWithScheduler,
   deactivateLaunchAgent,
   loadHostId,
   writeLaunchAgent,
@@ -263,22 +264,24 @@ const commands: Readonly<Record<string, (args: string[]) => Promise<unknown>>> =
     const { configPath } = parseConfigOnly(args);
     return withController({
       configPath,
-      run: async ({ config, controller }) => {
-        const result = await controller.activate();
-        const installation = currentManagedInstallation();
-        if (installation !== null) {
-          const path = writeLaunchAgent({
-            workspaceId: config.workspaceId,
-            nodeBinary: process.execPath,
-            cliFile: installation.cliFile,
-            configPath,
-            enabled: true,
-            logDirectory: managedLogDirectory(config.workspaceId),
-          });
-          activateLaunchAgent({ workspaceId: config.workspaceId, path });
-        }
-        return result;
-      },
+      run: ({ config, controller }) =>
+        activateWithScheduler({
+          activate: () => controller.activate(),
+          pause: () => controller.pause(),
+          enableScheduler: () => {
+            const installation = currentManagedInstallation();
+            if (installation === null) return;
+            const path = writeLaunchAgent({
+              workspaceId: config.workspaceId,
+              nodeBinary: process.execPath,
+              cliFile: installation.cliFile,
+              configPath,
+              enabled: true,
+              logDirectory: managedLogDirectory(config.workspaceId),
+            });
+            activateLaunchAgent({ workspaceId: config.workspaceId, path });
+          },
+        }),
     });
   },
   tick: async (args) => {

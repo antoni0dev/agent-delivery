@@ -12,6 +12,7 @@ type AdapterArgumentsInput = Readonly<{
     effort: RuntimeEffort;
     readOnly: boolean;
     outputSchema?: Readonly<Record<string, unknown>>;
+    outputSchemaPath?: string;
 }>;
 type ParseRuntimeOutputInput = Readonly<{
     stdout: string;
@@ -20,7 +21,7 @@ declare const codexOutput: ({ stdout }: ParseRuntimeOutputInput) => ParsedRuntim
 declare const claudeOutput: ({ stdout }: ParseRuntimeOutputInput) => ParsedRuntimeOutput;
 declare const resultObjectOutput: ({ stdout }: ParseRuntimeOutputInput) => ParsedRuntimeOutput;
 declare const parseSemanticVersion: (stdout: string) => string | null;
-declare const codexArguments: ({ model, effort, readOnly }: AdapterArgumentsInput) => readonly string[];
+declare const codexArguments: ({ model, effort, readOnly, outputSchemaPath, }: AdapterArgumentsInput) => readonly string[];
 declare const claudeArguments: ({ model, effort, readOnly, outputSchema, }: AdapterArgumentsInput) => readonly string[];
 declare const cursorArguments: ({ model, effort, readOnly }: AdapterArgumentsInput) => readonly string[];
 export declare const runtimeAdapters: Readonly<{

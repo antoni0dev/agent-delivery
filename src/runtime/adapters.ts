@@ -14,6 +14,7 @@ type AdapterArgumentsInput = Readonly<{
   effort: RuntimeEffort;
   readOnly: boolean;
   outputSchema?: Readonly<Record<string, unknown>>;
+  outputSchemaPath?: string;
 }>;
 
 type ParseRuntimeOutputInput = Readonly<{ stdout: string }>;
@@ -218,13 +219,19 @@ const versionPattern = /\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?/;
 const parseSemanticVersion = (stdout: string): string | null =>
   stdout.match(versionPattern)?.[0] ?? null;
 
-const codexArguments = ({ model, effort, readOnly }: AdapterArgumentsInput): readonly string[] => [
+const codexArguments = ({
+  model,
+  effort,
+  readOnly,
+  outputSchemaPath,
+}: AdapterArgumentsInput): readonly string[] => [
   "exec",
   "--ignore-user-config",
   "--ephemeral",
   "--json",
   "--color",
   "never",
+  ...(outputSchemaPath === undefined ? [] : ["--output-schema", outputSchemaPath]),
   "--model",
   model,
   "--sandbox",

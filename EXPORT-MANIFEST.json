@@ -40,8 +40,8 @@
     },
     {
       "path": "dist/cli.js",
-      "digest": "33be9819f73911647723d3adcc311eb26ab385eb2e167fdd45499704e11829dd",
-      "size": 19632
+      "digest": "b4451df713d8b0ecf4b1c98d8330b9fbe6bf3bf12f735431758e03106e3ff80b",
+      "size": 19765
     },
     {
       "path": "dist/commands.d.ts",
@@ -80,8 +80,8 @@
     },
     {
       "path": "dist/controller.js",
-      "digest": "a98b41115be64f4f5647311a2bf5548aa4cc1eb279cabfb7d385c8b83712a426",
-      "size": 80263
+      "digest": "9834e58db71489ffc89afc6b5af9770d3b838a006dbdb729655144d694edc216",
+      "size": 80583
     },
     {
       "path": "dist/distribution/export.d.ts",
@@ -175,23 +175,23 @@
     },
     {
       "path": "dist/host/index.d.ts",
-      "digest": "a5b42f14e8d97cf366886e1ef5c3e52303aef9f931b47e3575fd332af0c8c7cb",
-      "size": 210
+      "digest": "787274f11ef258daaf0b3f8f450c9d052b0bd7e229fd1f7bd56edc185873e9f8",
+      "size": 233
     },
     {
       "path": "dist/host/index.js",
-      "digest": "a5b42f14e8d97cf366886e1ef5c3e52303aef9f931b47e3575fd332af0c8c7cb",
-      "size": 210
+      "digest": "787274f11ef258daaf0b3f8f450c9d052b0bd7e229fd1f7bd56edc185873e9f8",
+      "size": 233
     },
     {
       "path": "dist/host/launchd.d.ts",
-      "digest": "191582e56225d8f1d44b996c05731e6c3dddba1a2f81a62dfbb3c19de96bd23e",
-      "size": 953
+      "digest": "bbd3d52db8659d74a0b43d25f455e9cf732c3be1bca1da041dbe1d32b4d2c920",
+      "size": 1115
     },
     {
       "path": "dist/host/launchd.js",
-      "digest": "260b4ab06c1b1081ac28b75ebf6d947c5398997e7e251e8cbcde241705aea4b0",
-      "size": 4106
+      "digest": "e058358d863bcfdf38aa1195cb60e74a4a2d953363a853a4df913548d3fccc71",
+      "size": 4633
     },
     {
       "path": "dist/host/notification.d.ts",
@@ -335,13 +335,13 @@
     },
     {
       "path": "dist/runtime/adapters.d.ts",
-      "digest": "67b848c36b98fc61154bdd35535b5659295e3cf38c6d9817752988529acd5fd4",
-      "size": 2762
+      "digest": "2e671598d41962c4cfee2bff017bf36724751da75153e561c7b6831669a8fca8",
+      "size": 2812
     },
     {
       "path": "dist/runtime/adapters.js",
-      "digest": "3e91684d335142d00b60d3158ddacb9413357d34f6991f25e2b74700a7263d3d",
-      "size": 8253
+      "digest": "44686c57b9faf358933a0e6871ca424dd18796777c5e500aed0314bc3cfc734e",
+      "size": 8358
     },
     {
       "path": "dist/runtime/core.d.ts",
@@ -360,8 +360,8 @@
     },
     {
       "path": "dist/runtime/index.js",
-      "digest": "b2f5dbfd9a894ce7cc9f443008354ef1e0790649bcb2de12c1933f29b97e8232",
-      "size": 13599
+      "digest": "9c4025ad9f84dcf5f8b4a2eb42cdbf209c84ce9f7242bb01addbf5239b1de4e0",
+      "size": 14000
     },
     {
       "path": "dist/runtime/native-permissions.d.ts",
@@ -545,8 +545,8 @@
     },
     {
       "path": "README.md",
-      "digest": "fc87deb27e010c28d39dcffdc9caeede5658486e8ffb261d1c21985d20dddded",
-      "size": 8459
+      "digest": "288abf613871f85bc4ac61ba17f3148ece4c433620338b2a448c49a1f70c088e",
+      "size": 8525
     },
     {
       "path": "scripts/ingest-sources.py",
@@ -570,8 +570,8 @@
     },
     {
       "path": "src/cli.ts",
-      "digest": "9d4b7666a05298e7a725d31d298f596e01e22e6e69383c0c5d10f554a75e6227",
-      "size": 18178
+      "digest": "4e9a7993264e21f896f6f0fbc1563fff23348dd5aa07635b37a26ca055df99fe",
+      "size": 18317
     },
     {
       "path": "src/commands.ts",
@@ -590,8 +590,8 @@
     },
     {
       "path": "src/controller.ts",
-      "digest": "878f9d7908865ce62b8200322fc889c25dab74c52ed8d93bab28f042fa91784d",
-      "size": 76149
+      "digest": "de4bec73b48287585b13c7885545c8269ac9004c7b709d90c0bc77242f3c8864",
+      "size": 76541
     },
     {
       "path": "src/distribution/export.ts",
@@ -640,13 +640,13 @@
     },
     {
       "path": "src/host/index.ts",
-      "digest": "ef8d1e46ce63bc1d6b0f79dc99fc7925cba1d372bc2336751b0ed888940797a1",
-      "size": 220
+      "digest": "d2fa9a1893714ba86e984e724cf110d452e74583b3ff283d1cd8f5c111845782",
+      "size": 245
     },
     {
       "path": "src/host/launchd.ts",
-      "digest": "214ff55ae40b80672edc22643f4002c140f6f7c8babbddae88b9b899b36ebacd",
-      "size": 4691
+      "digest": "abac047cd4a2ede7ee2fa1ef08258fe15c357fb95c6e7e5d99f07306f3c90734",
+      "size": 5295
     },
     {
       "path": "src/host/notification.ts",
@@ -720,8 +720,8 @@
     },
     {
       "path": "src/runtime/adapters.ts",
-      "digest": "f7eb5d092c0b552524e395f22e73dd8789e376962f070ed96b31581eafff2c82",
-      "size": 9517
+      "digest": "a505972b99e8bbf5eba129bce8b7fc7a488b8d3e41a034d2942eb25fe217591c",
+      "size": 9657
     },
     {
       "path": "src/runtime/core.ts",
@@ -730,8 +730,8 @@
     },
     {
       "path": "src/runtime/index.ts",
-      "digest": "3f508f66a93993770d2702fbd368f72cc76f4a1900e34f29b0c503382411141c",
-      "size": 14060
+      "digest": "966bf81f518080cb9d267910896b677582b3e1f717d26399bbc4bb2f1e0f0f02",
+      "size": 14449
     },
     {
       "path": "src/runtime/native-permissions.ts",
@@ -775,8 +775,8 @@
     },
     {
       "path": "test/controller-fixture.test.ts",
-      "digest": "03c51a60a58694a1894c410b8ee4e097404f7be17ff359b0a1315f08343e6a0f",
-      "size": 18927
+      "digest": "050dbe4149b663b33426ddde675fe9b51186516fb3fe65e9eda01bdf39dfc5fe",
+      "size": 18942
     },
     {
       "path": "test/controller-routing.test.ts",
@@ -790,8 +790,8 @@
     },
     {
       "path": "test/controller.test.ts",
-      "digest": "35a8a686ac96eeb6885ac92a966b56ee803a05082aaf90bbadbd347625d82a9e",
-      "size": 12809
+      "digest": "d3e6b5d9d950227b3e4c76ac1ce8231adba6ab568f26fb06b71300fc26e00504",
+      "size": 13535
     },
     {
       "path": "test/distribution.test.ts",
@@ -805,8 +805,8 @@
     },
     {
       "path": "test/host.test.ts",
-      "digest": "33d59b3a58264fe929d7f71c74d778dca642c8e8827574411d9b6f7c493430ba",
-      "size": 3823
+      "digest": "2943952128796765a67f8aa24be9a320447d0058bc4eb0f97199750d57d8a0c6",
+      "size": 5681
     },
     {
       "path": "test/integrations.test.ts",
@@ -840,8 +840,8 @@
     },
     {
       "path": "test/runtime-adapters.test.ts",
-      "digest": "ddf344d7ed4015cc5d09d7462fe3dd3f5dd34fe8eadb422852203462df1aae0d",
-      "size": 15098
+      "digest": "14fcb33e3166e2b771d21a10a8277128c48469b21efd0289dac803aef0ba4a27",
+      "size": 16274
     },
     {
       "path": "test/store.test.ts",
@@ -864,5 +864,5 @@
       "size": 385
     }
   ],
-  "manifestDigest": "a583f5b8d5dee290e5b9d27ba70fefb2b1025692ef4d63b7df101fabba9d7605"
+  "manifestDigest": "9c7beda45270a273cf578b5ca978606084fe3737e376b907b3894b2de75837ee"
 }

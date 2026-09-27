@@ -86,6 +86,10 @@ export function renderLaunchAgent(input: {
     <string>--config</string>
     <string>${escapeXml(input.configPath)}</string>
   </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key><string>${escapeXml([dirname(input.nodeBinary), "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"].join(":"))}</string>
+  </dict>
   <key>StartInterval</key><integer>${TICK_INTERVAL_SECONDS}</integer>
   <key>RunAtLoad</key><false/>
   <key>Disabled</key><${disabled}/>
@@ -128,8 +132,8 @@ export function activateLaunchAgent({
   const label = workspaceLabel(workspaceId);
   const target = `${domain}/${label}`;
   bootoutIfLoaded({ target, run });
-  run(["bootstrap", domain, path]);
   run(["enable", target]);
+  run(["bootstrap", domain, path]);
 }
 
 export function deactivateLaunchAgent({
@@ -147,4 +151,19 @@ export function deactivateLaunchAgent({
     throw error;
   }
   run(["disable", target]);
+}
+
+export async function activateWithScheduler<T>(input: {
+  activate: () => Promise<T>;
+  enableScheduler: () => void;
+  pause: () => void;
+}): Promise<T> {
+  const result = await input.activate();
+  try {
+    input.enableScheduler();
+  } catch {
+    input.pause();
+    throw new DeliveryError("Scheduler activation failed; intake remains paused", "blocked");
+  }
+  return result;
 }

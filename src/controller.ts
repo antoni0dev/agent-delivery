@@ -49,8 +49,12 @@ import type { Initiative, Store } from "./store.js";
 import { journeyReportSchema, verifyJourneys } from "./verification.js";
 
 const implementationResultSchema = z
-  .object({ summary: z.string().optional(), blocked: z.string().optional() })
-  .strict();
+  .object({ summary: z.string().min(1).nullable(), blocked: z.string().min(1).nullable() })
+  .strict()
+  .refine(
+    (result) => Number(result.summary !== null) + Number(result.blocked !== null) === 1,
+    "Return exactly one summary or blocker",
+  );
 const outputSchemas = {
   planner: planSchema,
   planCritic: reviewSchema,
@@ -1188,7 +1192,12 @@ export class Controller {
     });
     this.transition(task, "plan", value, "running");
     const run = await this.invoke({ task, value, role: "planner", prompt });
-    const plan = planSchema.parse(parseStructuredOutput(run.result.output));
+    const parsedPlan = planSchema.safeParse(parseStructuredOutput(run.result.output));
+    if (!parsedPlan.success)
+      throw new DeliveryError(
+        `Planner output violated its contract: ${parsedPlan.error.issues.map((issue) => `${issue.path.join(".")} (${issue.code})`).join(", ")}`,
+      );
+    const plan = parsedPlan.data;
     if (plan.unresolvedDecisions.length > 0)
       throw new DeliveryError(`Planning needs a decision: ${plan.unresolvedDecisions.join("; ")}`);
     if (!plan.requirements.some((requirement) => requirement.kind === "code-review"))
@@ -1372,15 +1381,15 @@ export class Controller {
       complexOrMoney: plan.complexOrMoney,
       prompt: JSON.stringify({
         instruction:
-          "Implement the frozen task packet. Stay in planned scope. Author meaningful tests. Do not run heavy builds or browsers; the controller serializes declared verification commands. Do not push, open a PR, merge or modify tracker state. Return JSON {summary:string}. If architecture or product assumptions fail, return JSON {blocked:string} without inventing a solution.",
+          "Implement the frozen task packet. Stay in planned scope. Author meaningful tests. Do not run heavy builds or browsers; the controller serializes declared verification commands. Do not push, open a PR, merge or modify tracker state. Return JSON {summary:string,blocked:null}. If architecture or product assumptions fail, return JSON {summary:null,blocked:string} without inventing a solution.",
         packet: JSON.parse(readArtifact(ensurePresent(value.packet, "Missing packet"))),
         critique: value.critique ?? null,
       }),
     });
-    const implementationOutput = z
-      .object({ summary: z.string().optional(), blocked: z.string().optional() })
-      .parse(parseStructuredOutput(implementation.result.output));
-    if (implementationOutput.blocked !== undefined)
+    const implementationOutput = implementationResultSchema.parse(
+      parseStructuredOutput(implementation.result.output),
+    );
+    if (implementationOutput.blocked !== null)
       throw new DeliveryError(implementationOutput.blocked);
     const project = this.project(task);
     const cwd = ensurePresent(value.worktree, "Missing worktree");
@@ -1388,7 +1397,9 @@ export class Controller {
     this.services.git.commitImplementation({ project, cwd, title: issue.title });
     if (
       plan.requirements.some((requirement) =>
-        ["browser", "authenticated", "nonproduction-write"].includes(requirement.kind),
+        ["unit", "integration", "browser", "authenticated", "nonproduction-write"].includes(
+          requirement.kind,
+        ),
       )
     ) {
       this.transition(task, "prepare-qa", value);
@@ -1406,15 +1417,13 @@ export class Controller {
       complexOrMoney: true,
       prompt: JSON.stringify({
         instruction:
-          "You are a fresh QA test author. Independently inspect the candidate and accepted journeys. Author or repair committed verification tests and deterministic fixtures for every applicable journey, including real non-production authentication and authoritative write outcome assertions where required. Do not change product code or product semantics, push, run browsers or heavy builds. Existing meaningful tests may be retained when they cover the exact journeys. Return JSON {summary:string} or {blocked:string} for a required product/architecture decision. A different fresh context will review and execute the final tests.",
+          "You are a fresh QA test author. Independently inspect the candidate and accepted journeys. Author or repair committed verification tests and deterministic fixtures for every applicable journey, including real non-production authentication and authoritative write outcome assertions where required. Do not change product code or product semantics, push, run browsers or heavy builds. Existing meaningful tests may be retained when they cover the exact journeys. Return JSON {summary:string,blocked:null} or {summary:null,blocked:string} for a required product/architecture decision. A different fresh context will review and execute the final tests.",
         packet: JSON.parse(readArtifact(ensurePresent(value.packet, "Missing packet"))),
         candidate: this.binding(task, value),
       }),
     });
-    const output = z
-      .object({ summary: z.string().optional(), blocked: z.string().optional() })
-      .parse(parseStructuredOutput(run.result.output));
-    if (output.blocked !== undefined) throw new DeliveryError(output.blocked);
+    const output = implementationResultSchema.parse(parseStructuredOutput(run.result.output));
+    if (output.blocked !== null) throw new DeliveryError(output.blocked);
     await this.assertAdmission(task);
     this.services.git.commitImplementation({
       project: this.project(task),

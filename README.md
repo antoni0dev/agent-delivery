@@ -68,7 +68,7 @@ Installation runs the non-live doctor checks, stages and verifies a managed vers
 
 Activation validates reviewed knowledge, source eligibility, behavior evidence, runtime conformance and authority. Local activation state records the host, exact configuration digest, selected runtime profile and conformance digest; the authority grant is bound through the configuration digest. If a managed installation exists, successful activation enables its five-minute `tick` job.
 
-The launch agent contains only absolute paths to the Node binary, installed CLI, and workspace config. It contains no credentials. Managed files are replaced only when the previous install manifest proves ownership and their digests have not changed. Existing unknown or locally edited files are preserved and installation stops.
+The launch agent contains absolute paths to the Node binary, installed CLI, workspace config and logs, plus a fixed minimal executable PATH. It contains no credentials or copied shell environment. Managed files are replaced only when the previous install manifest proves ownership and their digests have not changed. Existing unknown or locally edited files are preserved and installation stops.
 
 See [docs/operations.md](docs/operations.md) for pause, upgrade, recovery, export, and verification report details.
 

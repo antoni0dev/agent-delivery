@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import {
   activateLaunchAgent,
+  activateWithScheduler,
   deactivateLaunchAgent,
   loadHostId,
   renderLaunchAgent,
@@ -117,4 +119,65 @@ test("pausing disables future launchd runs without terminating the active contro
     calls.map((args) => args[0]),
     ["print", "disable"],
   );
+});
+
+test("reactivation clears the persisted disabled override before bootstrap", () => {
+  let disabled = true;
+  let started = false;
+  activateLaunchAgent({
+    workspaceId: "workspace",
+    path: "/tmp/workspace.plist",
+    run: (args) => {
+      if (args[0] === "print") throw new Error("Could not find service in domain for user");
+      if (args[0] === "enable") disabled = false;
+      if (args[0] === "bootstrap") {
+        assert.equal(disabled, false, "launchd refuses a disabled service");
+        started = true;
+      }
+    },
+  });
+  assert.equal(started, true);
+});
+
+test("scheduler failure rolls back intake after otherwise successful activation", async () => {
+  let active = false;
+  await assert.rejects(
+    activateWithScheduler({
+      activate: async () => {
+        active = true;
+        return { active: true };
+      },
+      enableScheduler: () => {
+        throw new Error("bootstrap failed");
+      },
+      pause: () => {
+        active = false;
+      },
+    }),
+    /intake remains paused/,
+  );
+  assert.equal(active, false);
+});
+
+test("launchd can resolve the selected Node runtime without shell startup configuration", {
+  skip: process.platform !== "darwin",
+}, () => {
+  const plist = renderLaunchAgent({
+    workspaceId: "workspace",
+    nodeBinary: process.execPath,
+    cliFile: "/tmp/cli.js",
+    configPath: "/tmp/workspace.json",
+    enabled: true,
+    logDirectory: "/tmp/logs",
+  });
+  const path = execFileSync(
+    "/usr/bin/plutil",
+    ["-extract", "EnvironmentVariables.PATH", "raw", "-o", "-", "-"],
+    { input: plist, encoding: "utf8" },
+  ).trim();
+  const executable = execFileSync("node", ["-p", "process.execPath"], {
+    env: { PATH: path },
+    encoding: "utf8",
+  }).trim();
+  assert.equal(executable, process.execPath);
 });

@@ -409,3 +409,34 @@ test("deadline and explicit cancellation terminate owned process groups", async 
     assert.equal(result.status, "cancelled");
   });
 });
+
+test("Codex receives the exact final-output schema as a readable file", async () => {
+  const fixture = await createFixture({
+    version: "codex-cli 0.155.0",
+    runSource:
+      'process.stdout.write(JSON.stringify({ type: "thread.started", thread_id: "schema-session" }) + "\\n"); process.stdout.write(JSON.stringify({ type: "item.completed", item: { type: "agent_message", text: "{}" } }) + "\\n");',
+  });
+  const schema = {
+    type: "object",
+    properties: { kind: { type: "string", enum: ["static", "unit"] } },
+    required: ["kind"],
+    additionalProperties: false,
+  };
+  await startRuntime({
+    profile: "codex",
+    role: "planner",
+    executable: fixture.executable,
+    cwd: fixture.cwd,
+    prompt: "Use the output schema",
+    invocationId: "schema",
+    artifactDirectory: fixture.artifacts,
+    outputSchema: schema,
+  });
+  const args = await readJson(fixture.argumentsPath);
+  assert.ok(Array.isArray(args));
+  const index = args.indexOf("--output-schema");
+  assert.ok(index >= 0, "Codex must receive the schema option");
+  const path = args[index + 1];
+  assert.equal(typeof path, "string");
+  assert.deepEqual(await readJson(path), schema);
+});

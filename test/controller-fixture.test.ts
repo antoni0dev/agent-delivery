@@ -283,7 +283,7 @@ export function createControllerFixture({
     const outputByRole: Record<RuntimeInput["role"], unknown> = {
       planner: planForIssue(prompt.success ? prompt.data.issue.id : issue.id),
       planCritic: cleanReview,
-      implementer: { summary: "Implemented the frozen packet exactly once." },
+      implementer: { summary: "Implemented the frozen packet exactly once.", blocked: null },
       reviewer: cleanReview,
       browserVerifier: cleanReview,
     };

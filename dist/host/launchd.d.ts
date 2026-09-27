@@ -29,4 +29,9 @@ export declare function deactivateLaunchAgent({ workspaceId, run, }: {
     workspaceId: string;
     run?: LaunchctlRunner;
 }): void;
+export declare function activateWithScheduler<T>(input: {
+    activate: () => Promise<T>;
+    enableScheduler: () => void;
+    pause: () => void;
+}): Promise<T>;
 export {};

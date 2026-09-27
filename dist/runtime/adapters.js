@@ -134,13 +134,14 @@ const claudeOutput = ({ stdout }) => parseClaudeOutput(stdout);
 const resultObjectOutput = ({ stdout }) => parseResultObject(stdout);
 const versionPattern = /\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?/;
 const parseSemanticVersion = (stdout) => stdout.match(versionPattern)?.[0] ?? null;
-const codexArguments = ({ model, effort, readOnly }) => [
+const codexArguments = ({ model, effort, readOnly, outputSchemaPath, }) => [
     "exec",
     "--ignore-user-config",
     "--ephemeral",
     "--json",
     "--color",
     "never",
+    ...(outputSchemaPath === undefined ? [] : ["--output-schema", outputSchemaPath]),
     "--model",
     model,
     "--sandbox",

@@ -314,12 +314,19 @@ export const startRuntime = async (input: StartRuntimeInput): Promise<RuntimeRes
     return result;
   }
 
+  const outputSchemaPath =
+    input.profile === "codex" && input.outputSchema !== undefined
+      ? resolve(input.artifactDirectory, `${input.invocationId}.schema.json`)
+      : undefined;
+  if (outputSchemaPath !== undefined)
+    await writeFile(outputSchemaPath, JSON.stringify(input.outputSchema), { mode: 0o600 });
   const adapter = runtimeAdapters[input.profile];
   const args = adapter.buildArguments({
     model: selected.model,
     effort: selected.effort,
     readOnly: selected.readOnly,
     ...(input.outputSchema === undefined ? {} : { outputSchema: input.outputSchema }),
+    ...(outputSchemaPath === undefined ? {} : { outputSchemaPath }),
   });
   const command = selected.readOnly
     ? readOnlyRuntimeCommand({

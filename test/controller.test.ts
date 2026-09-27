@@ -395,3 +395,19 @@ function recordEvidence({
   });
   fixture.store.finishEvidence({ id: evidence.id, passed, artifact });
 }
+
+test("unit-only work receives independent QA authorship before acceptance", async (context) => {
+  const plan = createPlan();
+  plan.requirements = plan.requirements.filter((requirement) => requirement.kind !== "browser");
+  const fixture = createControllerFixture({ planForIssue: () => plan });
+  context.after(fixture.cleanup);
+  await fixture.controller.run({
+    profile: "codex",
+    issueId: fixture.issue.id,
+    projectId: "project",
+  });
+  assert.equal(fixture.store.findByIssue(fixture.issue.id)?.state, "completed");
+  const writers = fixture.runtimeCalls.filter((call) => call.role === "implementer");
+  assert.equal(writers.length, 2);
+  assert.notEqual(writers[0]?.invocationId, writers[1]?.invocationId);
+});

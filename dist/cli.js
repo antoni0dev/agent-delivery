@@ -9,7 +9,7 @@ import { configDigest, configTemplate, loadConfig } from "./config.js";
 import { Controller } from "./controller.js";
 import { createPortableExport, currentManagedInstallation, installManagedDistribution, installNodeDependencies, upgradeManagedDistribution, } from "./distribution/index.js";
 import { DeliveryError, profiles } from "./domain.js";
-import { activateLaunchAgent, deactivateLaunchAgent, loadHostId, writeLaunchAgent, } from "./host/index.js";
+import { activateLaunchAgent, activateWithScheduler, deactivateLaunchAgent, loadHostId, writeLaunchAgent, } from "./host/index.js";
 import { runBehaviorEvaluation } from "./knowledge/model-evaluation.js";
 import { Store } from "./store.js";
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -187,10 +187,13 @@ const commands = {
         const { configPath } = parseConfigOnly(args);
         return withController({
             configPath,
-            run: async ({ config, controller }) => {
-                const result = await controller.activate();
-                const installation = currentManagedInstallation();
-                if (installation !== null) {
+            run: ({ config, controller }) => activateWithScheduler({
+                activate: () => controller.activate(),
+                pause: () => controller.pause(),
+                enableScheduler: () => {
+                    const installation = currentManagedInstallation();
+                    if (installation === null)
+                        return;
                     const path = writeLaunchAgent({
                         workspaceId: config.workspaceId,
                         nodeBinary: process.execPath,
@@ -200,9 +203,8 @@ const commands = {
                         logDirectory: managedLogDirectory(config.workspaceId),
                     });
                     activateLaunchAgent({ workspaceId: config.workspaceId, path });
-                }
-                return result;
-            },
+                },
+            }),
         });
     },
     tick: async (args) => {

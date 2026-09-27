@@ -1487,7 +1487,7 @@ export class Controller {
         await this.assertAdmission(task);
         return github.createPullRequest({
           headBranch: ensurePresent(value.branch, "Missing branch"),
-          title: `feat: ${issue.title}`,
+          title: `feat: ${issue.title.replace(/^[A-Z]/, (character) => character.toLowerCase())}`,
           body: `${plan.summary}\n\n${issue.url}`,
           operationKey: key,
         });

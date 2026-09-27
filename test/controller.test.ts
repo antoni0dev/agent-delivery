@@ -449,3 +449,14 @@ test("preparation failure blocks before implementation without consuming code re
   assert.equal(fixture.store.runningInvocations().length, 0);
   assert.equal(fixture.githubCalls.merged.length, 0);
 });
+
+test("generated pull requests satisfy lowercase-subject policies", async (context) => {
+  const fixture = createControllerFixture({ strictPrTitle: true });
+  context.after(fixture.cleanup);
+  await fixture.controller.run({
+    profile: "codex",
+    issueId: fixture.issue.id,
+    projectId: "project",
+  });
+  assert.equal(fixture.store.findByIssue(fixture.issue.id)?.state, "completed");
+});

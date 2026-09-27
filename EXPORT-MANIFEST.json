@@ -80,8 +80,8 @@
     },
     {
       "path": "dist/controller.js",
-      "digest": "e13d7c4e14d9a743a7774e3ecc6acbd73f28e6b2bad1e27c6cad84288c07d233",
-      "size": 81790
+      "digest": "e1efa16272961c988622faabcdfe067bc4244fbca05b5df75b4a5e2c28005dd6",
+      "size": 81848
     },
     {
       "path": "dist/distribution/export.d.ts",
@@ -150,8 +150,8 @@
     },
     {
       "path": "dist/git.js",
-      "digest": "c29bca82b8182304c903670111cca7a2a4f1d3e74f60afc1023cfa2557ddc3a8",
-      "size": 9118
+      "digest": "d7cc796de31a5ebe445c6863777027933c85b23eeeab233bca678ed6a73188a3",
+      "size": 9239
     },
     {
       "path": "dist/host/execution-lock.d.ts",
@@ -590,8 +590,8 @@
     },
     {
       "path": "src/controller.ts",
-      "digest": "4b6a5b6b8b3d9f357c1a3d90e89b54a1adeccf4a8d47ba88df2598a1254c5ebb",
-      "size": 77523
+      "digest": "9dfcfeb43f25998d33108d88d6a8ed955806c2c83bf8af90314d59d33f8566cd",
+      "size": 77581
     },
     {
       "path": "src/distribution/export.ts",
@@ -625,8 +625,8 @@
     },
     {
       "path": "src/git.ts",
-      "digest": "8910de941c6c9a3ab601752271c20e649338d9152e32a5064e1731bfd459f003",
-      "size": 9570
+      "digest": "611019412649e49579f437488f911d4f0f84bd29cea2f83276e867c7dc6a256b",
+      "size": 9661
     },
     {
       "path": "src/host/execution-lock.ts",
@@ -775,8 +775,8 @@
     },
     {
       "path": "test/controller-fixture.test.ts",
-      "digest": "ee30d5e16157257a970a1c15b1b6dc758a43a47d12649d29c24349f0c6511b05",
-      "size": 19088
+      "digest": "210bfa612be8dcddd91efd03fb126b943477715c22c4bc0c5f2601d54bca46d8",
+      "size": 19262
     },
     {
       "path": "test/controller-routing.test.ts",
@@ -790,8 +790,8 @@
     },
     {
       "path": "test/controller.test.ts",
-      "digest": "77396109a81c8ecb4d95c621638baf6323dd0d36bd47e03563e4dc4945d6d74e",
-      "size": 15101
+      "digest": "d41019c272f5cb70625ac12b614446bc36160e3303e6eaaeb721bc2172c46761",
+      "size": 15495
     },
     {
       "path": "test/distribution.test.ts",
@@ -864,5 +864,5 @@
       "size": 385
     }
   ],
-  "manifestDigest": "ab07f85a5c787cc4dee1ac5c10698e0be4f76eb96fc19fa2aef8ebf6d4b59f19"
+  "manifestDigest": "61cf37d5dd65442c31ecf2b83cae02d149ca48ad67062d1f58ba4f8a12c00a7a"
 }

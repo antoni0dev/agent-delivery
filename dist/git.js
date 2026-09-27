@@ -171,7 +171,10 @@ export function commitImplementation({ project, cwd, title, }) {
                 "core.hooksPath=/dev/null",
                 "commit",
                 "-m",
-                `feat: ${title.replace(/[\r\n]/g, " ").slice(0, 64)}`,
+                `feat: ${title
+                    .replace(/[\r\n]/g, " ")
+                    .replace(/^[A-Z]/, (character) => character.toLowerCase())
+                    .slice(0, 64)}`,
             ],
             env: {
                 ...commandEnvironment(),

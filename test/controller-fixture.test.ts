@@ -120,6 +120,7 @@ export function createControllerFixture({
   intakeIntervalMs,
   intake,
   preparation,
+  strictPrTitle = false,
 }: {
   profile?: WorkspaceConfig["intakeRuntimeProfile"];
   planForIssue?: (issueId: string) => Plan;
@@ -131,6 +132,7 @@ export function createControllerFixture({
   intakeIntervalMs?: number;
   intake?: WorkspaceConfig["linear"]["intake"];
   preparation?: WorkspaceConfig["projects"][number]["preparation"];
+  strictPrTitle?: boolean;
 } = {}): ControllerFixture {
   const root = mkdtempSync(join(tmpdir(), "controller-lifecycle-"));
   const projectRoot = join(root, "repository");
@@ -433,7 +435,9 @@ export function createControllerFixture({
     }),
     findPullRequest: async ({ headBranch }) =>
       [...pulls.values()].find((pull) => pull.headBranch === headBranch && !pull.merged) ?? null,
-    createPullRequest: async ({ headBranch }) => {
+    createPullRequest: async ({ headBranch, title }) => {
+      if (strictPrTitle && /^feat: [A-Z]/.test(title))
+        throw new Error("PR subject must start lowercase");
       const pull: Pull = {
         number: nextPull,
         url: `https://github.example.test/pull/${nextPull}`,

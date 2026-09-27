@@ -20,6 +20,7 @@ export const stages = [
   "validate",
   "plan",
   "challenge",
+  "approve-plan",
   "implement",
   "prepare-qa",
   "review",

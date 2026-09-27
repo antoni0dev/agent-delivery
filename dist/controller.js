@@ -56,6 +56,9 @@ const checkpointSchema = z
     notified: z.boolean().optional(),
     desktopNotified: z.boolean().optional(),
     waitingNotice: z.string().optional(),
+    approvalContext: artifactSchema.optional(),
+    approvalDesktopNotified: z.boolean().optional(),
+    approvalLinearNotified: z.boolean().optional(),
 })
     .strict();
 const DEFAULT_INTAKE_INTERVAL_MS = 5 * 60 * 1000;
@@ -450,6 +453,9 @@ export class Controller {
                 state,
                 stage,
                 reason,
+                pendingPlanApproval: stage === "approve-plan" && state === "waiting"
+                    ? this.input.store.get(id).plan_digest
+                    : null,
             })),
             invocations: this.input.store.runningInvocations(),
         };
@@ -591,7 +597,21 @@ export class Controller {
         }
         return { id, owner: newOwner, profile };
     }
-    async run({ issueId, projectId, profile, }) {
+    async manage(input) {
+        const profile = input.profile ??
+            ensurePresent(this.input.store.settings().profile, "Activate a runtime profile first");
+        return this.run({ ...input, profile, humanApproval: "required" });
+    }
+    approvePlan(input) {
+        const task = this.input.store.get(input.id);
+        this.assertApprovalContext(task, checkpoint(task));
+        this.input.store.approvePlan({
+            ...input,
+            hostId: this.input.hostId,
+            configDigest: configDigest(this.input.config),
+        });
+    }
+    async run({ issueId, projectId, profile, humanApproval, }) {
         this.input.store.assertActive({
             hostId: this.input.hostId,
             configDigest: configDigest(this.input.config),
@@ -619,6 +639,7 @@ export class Controller {
             issue,
             projectId,
             profile: selected,
+            ...(humanApproval === undefined ? {} : { humanApproval }),
             activation: {
                 hostId: this.input.hostId,
                 configDigest: configDigest(this.input.config),
@@ -657,6 +678,10 @@ export class Controller {
                 .list()
                 .filter((task) => task.state === "completed" && checkpoint(task).notified !== true))
                 await this.notifyCompletion(task, checkpoint(task));
+            for (const task of this.input.store
+                .list()
+                .filter((task) => task.stage === "approve-plan" && task.state === "waiting"))
+                await this.notifyDecision(task);
             await this.refreshIntake();
             await this.drain();
             return this.status();
@@ -725,6 +750,7 @@ export class Controller {
         return this.input.store.list().filter((task) => {
             const value = checkpoint(task);
             return (["queued", "waiting"].includes(task.state) &&
+                !(task.stage === "approve-plan" && task.state === "waiting") &&
                 value.managedByParent !== true &&
                 !(value.dependencies ?? []).some((dependency) => this.input.store.get(dependency).state !== "completed") &&
                 !(task.stage === "accept" &&
@@ -826,6 +852,7 @@ export class Controller {
                     validate: () => this.validate(task, value),
                     plan: () => this.planTask(task, value, issue),
                     challenge: () => this.challenge(task, value),
+                    "approve-plan": () => this.dispatchPlan(task, value),
                     implement: () => this.implement(task, value, issue),
                     "prepare-qa": () => this.prepareQa(task, value, issue),
                     review: () => this.review(task, value),
@@ -1031,7 +1058,28 @@ export class Controller {
         this.input.store.recordPlan({ id: task.id, digest: artifact.digest });
         this.transition(task, "challenge", { ...value, plan: artifact });
     }
+    approvalContext(task, value) {
+        const project = this.project(task);
+        return this.artifact({
+            config: configDigest(this.input.config),
+            instructions: readProjectInstructions(project),
+            knowledge: this.services.knowledge.select({
+                root: this.input.config.knowledgeRoot,
+                topics: this.plan(value).topics,
+            }),
+            release: this.services.knowledge.load({ root: this.input.config.knowledgeRoot }).digest,
+        });
+    }
+    assertApprovalContext(task, value) {
+        if (this.input.store.planApproval(task.id) === null)
+            return;
+        const frozen = ensurePresent(value.approvalContext, "Missing planning context; replan required");
+        readArtifact(frozen);
+        if (frozen.digest !== this.approvalContext(task, value).digest)
+            throw new DeliveryError("Planning guidance or repository instructions changed; replan required");
+    }
     async challenge(task, value) {
+        const approvalContext = this.approvalContext(task, value);
         const plan = this.plan(value);
         const project = this.project(task);
         this.transition(task, "challenge", value, "running");
@@ -1085,7 +1133,37 @@ export class Controller {
         });
         if (!published.body.includes(digest) || !published.body.includes(fullPublishedPlan))
             throw new DeliveryError("Published plan revision did not read back correctly");
-        this.input.store.acceptPlan({ id: task.id, digest });
+        this.input.store.acceptPlan({
+            id: task.id,
+            digest,
+            configDigest: configDigest(this.input.config),
+        });
+        if (this.input.store.planApproval(task.id) !== null) {
+            this.transition(task, "approve-plan", { ...value, approvalContext }, "waiting", `Human approval required for plan ${digest}`);
+            this.assertApprovalContext(this.input.store.get(task.id), checkpoint(this.input.store.get(task.id)));
+            await this.notifyDecision(this.input.store.get(task.id));
+            return;
+        }
+        await this.dispatchPlan(this.input.store.get(task.id), value);
+    }
+    async dispatchPlan(task, value) {
+        this.assertApprovalContext(task, value);
+        const approval = this.input.store.planApproval(task.id);
+        const digest = ensurePresent(task.accepted_plan_digest, "Missing accepted plan");
+        if (approval !== null &&
+            (approval.approved_at === null ||
+                approval.plan_digest !== digest ||
+                approval.config_digest !== configDigest(this.input.config))) {
+            this.transition(task, "approve-plan", value, "waiting", `Human approval required for plan ${digest}`);
+            return;
+        }
+        const plan = this.plan(value);
+        const project = this.project(task);
+        const linear = this.services.linear(project);
+        const selected = this.services.knowledge.select({
+            root: this.input.config.knowledgeRoot,
+            topics: plan.topics,
+        });
         const packet = this.artifact({
             issue: JSON.parse(task.issue_snapshot),
             plan,
@@ -1569,12 +1647,31 @@ export class Controller {
         this.transition(task, "accept", value, "completed");
         await this.notifyCompletion(this.input.store.get(task.id), value);
     }
+    recordApprovalNotification(task, channel) {
+        this.input.store.recordApprovalNotification({
+            id: task.id,
+            ownerId: task.owner_id,
+            planDigest: ensurePresent(task.accepted_plan_digest, "Missing approval plan"),
+            contextDigest: ensurePresent(checkpoint(task).approvalContext, "Missing approval context")
+                .digest,
+            channel,
+        });
+    }
     async notifyDecision(task) {
         const reason = task.reason ?? "Inspect the private execution evidence";
-        const body = `Delivery is blocked: ${reason}`;
-        if (this.input.config.notifications.desktop) {
+        const approval = task.stage === "approve-plan" && task.state === "waiting";
+        let value = checkpoint(task);
+        const body = approval
+            ? `Plan ready for your approval: ${reason}`
+            : `Delivery is blocked: ${reason}`;
+        if (this.input.config.notifications.desktop &&
+            !(approval && value.approvalDesktopNotified === true)) {
             try {
                 this.services.desktop({ message: body });
+                if (approval) {
+                    this.recordApprovalNotification(task, "desktop");
+                    value = checkpoint(this.input.store.get(task.id));
+                }
             }
             catch {
                 this.input.store.event({
@@ -1584,7 +1681,8 @@ export class Controller {
                 });
             }
         }
-        if (!this.input.config.notifications.linear)
+        if (!this.input.config.notifications.linear ||
+            (approval && value.approvalLinearNotified === true))
             return;
         try {
             const linear = this.services.linear(this.project(task));
@@ -1597,6 +1695,9 @@ export class Controller {
                 create: () => linear.notify({ issueId: task.issue_id, body, operationKey: key }),
                 remoteId: (comment) => comment.id,
             });
+            if (approval) {
+                this.recordApprovalNotification(task, "linear");
+            }
         }
         catch {
             this.input.store.event({

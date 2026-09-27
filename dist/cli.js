@@ -7,15 +7,19 @@ import { parseArgs } from "node:util";
 import { z } from "zod";
 import { configDigest, configTemplate, loadConfig } from "./config.js";
 import { Controller } from "./controller.js";
-import { createPortableExport, currentManagedInstallation, installManagedDistribution, installNodeDependencies, upgradeManagedDistribution, } from "./distribution/index.js";
+import { createPortableExport, currentManagedInstallation, defaultManagedRoot, installManagedDistribution, installNodeDependencies, upgradeManagedDistribution, } from "./distribution/index.js";
+import { managerContract } from "./distribution/manager-contract.js";
 import { DeliveryError, profiles } from "./domain.js";
 import { activateLaunchAgent, activateWithScheduler, deactivateLaunchAgent, loadHostId, writeLaunchAgent, } from "./host/index.js";
+import { locateWorkspace, registerWorkspace } from "./host/workspace-registry.js";
 import { runBehaviorEvaluation } from "./knowledge/model-evaluation.js";
 import { Store } from "./store.js";
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const profileSchema = z.enum(profiles);
 const stateDatabaseName = "agent-delivery.sqlite";
 const usage = `Usage:
+  delivery manager-guide
+  delivery locate --root <repository>
   delivery init --config <path> --root <repo>
   delivery doctor --config <path> [--live]
   delivery conform --config <path> --profile codex|claude-code|cursor
@@ -23,6 +27,8 @@ const usage = `Usage:
   delivery transfer-host --config <path> --to <host-id>
   delivery activate --config <path>
   delivery tick --config <path>
+  delivery manage --config <path> --issue <id> --project <id> [--profile <profile>]
+  delivery approve-plan --config <path> --initiative <id> --digest <digest>
   delivery run --config <path> --issue <id> --project <id> --profile <profile>
   delivery status --config <path>
   delivery pause --config <path>
@@ -81,6 +87,22 @@ export function assertUpgradeOwnership({ boundHostId, currentHostId, boundConfig
         throw new DeliveryError("Upgrade requires the owning host and the configuration bound at activation");
 }
 const commands = {
+    "manager-guide": async (args) => {
+        parseArgs({ args, allowPositionals: false, strict: true });
+        return { contract: managerContract };
+    },
+    locate: async (args) => {
+        const { values } = parseArgs({
+            args,
+            allowPositionals: false,
+            strict: true,
+            options: { root: { type: "string" } },
+        });
+        return locateWorkspace({
+            managedRoot: defaultManagedRoot(),
+            root: resolve(required(values.root, "root")),
+        });
+    },
     help: async (args) => {
         parseArgs({ args, allowPositionals: false, strict: true });
         return { usage };
@@ -232,6 +254,52 @@ const commands = {
         };
         return withController({ configPath, run: ({ controller }) => controller.run(input) });
     },
+    manage: async (args) => {
+        const { values } = parseArgs({
+            args,
+            allowPositionals: false,
+            strict: true,
+            options: {
+                config: { type: "string" },
+                issue: { type: "string" },
+                project: { type: "string" },
+                profile: { type: "string" },
+            },
+        });
+        const configPath = resolve(required(values.config, "config"));
+        const profile = values.profile === undefined ? undefined : requiredProfile(parseProfile(values.profile));
+        return withController({
+            configPath,
+            run: ({ controller }) => controller.manage({
+                issueId: required(values.issue, "issue"),
+                projectId: required(values.project, "project"),
+                ...(profile === undefined ? {} : { profile }),
+            }),
+        });
+    },
+    "approve-plan": async (args) => {
+        const { values } = parseArgs({
+            args,
+            allowPositionals: false,
+            strict: true,
+            options: {
+                config: { type: "string" },
+                initiative: { type: "string" },
+                digest: { type: "string" },
+            },
+        });
+        const configPath = resolve(required(values.config, "config"));
+        return withController({
+            configPath,
+            run: ({ controller }) => {
+                controller.approvePlan({
+                    id: required(values.initiative, "initiative"),
+                    digest: required(values.digest, "digest"),
+                });
+                return controller.status();
+            },
+        });
+    },
     manual: async (args) => {
         const { values } = parseArgs({
             args,
@@ -368,6 +436,7 @@ const commands = {
                     });
                     if (activeHere)
                         activateLaunchAgent({ workspaceId: config.workspaceId, path });
+                    registerWorkspace({ managedRoot: defaultManagedRoot(), configPath, config });
                     return {
                         version: manifest.version,
                         cliFile: manifest.cliFile,
@@ -416,6 +485,7 @@ const commands = {
                         enabled: false,
                         logDirectory: managedLogDirectory(config.workspaceId),
                     });
+                    registerWorkspace({ managedRoot: defaultManagedRoot(), configPath, config });
                     return {
                         version: result.manifest.version,
                         backupDirectory: result.backupDirectory,

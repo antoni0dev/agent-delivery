@@ -108,11 +108,11 @@ Reconcile existing owners, sessions, branches and PRs first. Establish one activ
 
 ```sh
 delivery activate --config /absolute/private/workspace.json
-delivery run --config /absolute/private/workspace.json --project <configured-id> --issue <issue-id> --profile codex
+delivery manage --config /absolute/private/workspace.json --project <configured-id> --issue <issue-id>
 delivery status --config /absolute/private/workspace.json
 ```
 
-Activation also enables five-minute intake when a managed installation exists. Keeping `automaticOthers` false limits this pilot to explicit starts. A run must publish/read back its plan, obtain independent challenge, implement, independently review, execute required QA, check current CI, merge within authority and confirm the remote outcome before completion.
+Activation also enables five-minute intake when a managed installation exists. Keeping `automaticOthers` false limits this pilot to explicit starts. A managed initiative must publish/read back its plan, obtain independent challenge and human approval of that exact revision, implement, independently review, execute required QA, check current CI, merge within authority and confirm the remote outcome before completion.
 
 Complete one real ticket, then two independent concurrent initiatives before enabling routine automatic intake. The test suite and model fixtures alone do not prove this operational milestone.
 
@@ -128,7 +128,7 @@ delivery pause --config /absolute/private/workspace.json
 
 Manual takeover must confirm previous execution stopped before you edit its worktree. Release does not resume cancelled work. Pause stops new intake; it does not promise running processes have terminated. Use `cancel --initiative <id>` for owned cancellation.
 
-For upgrades, build/check the new controller checkout and run its `node dist/cli.js upgrade --config ...`. The upgrade drains, backs up state/configuration and stages managed files. It leaves intake inactive for explicit revalidation/reactivation. Keep old backups until destination acceptance passes. See [operations](operations.md) for recovery and same-workspace host transfer.
+For upgrades, first use the currently installed `delivery pause --config ...` and wait for owned invocations to finish. Build/check the new controller checkout, then run its `node dist/cli.js upgrade --config ...`. The new version refuses schema migration while the old workspace is active or owns processes. It preserves a private old-format database snapshot before migration, then backs up state/configuration and stages managed files. It leaves intake inactive for explicit revalidation/reactivation. Keep old backups until destination acceptance passes. See [operations](operations.md) for recovery and same-workspace host transfer.
 
 ## Troubleshooting
 
@@ -143,3 +143,7 @@ For upgrades, build/check the new controller checkout and run its `node dist/cli
 | Uncertain mutation outcome | Let the controller reconcile the recorded operation; do not repeat it manually |
 
 For process diagnostics, output only safe numeric metadata. Process titles and arguments can contain credentials even when a command appears to request only a process name.
+
+## Portable manager entrypoint
+
+After installation, use the shared `agent-delivery` skill from any supported client. It resolves the workspace with `delivery locate --root <repository>` and loads `delivery manager-guide`. Read [the manager workflow](engineering-manager.md) for exact-plan approval and continuation across days. Do not copy company-specific manager skills into this portable distribution or add another scheduler for the same work.

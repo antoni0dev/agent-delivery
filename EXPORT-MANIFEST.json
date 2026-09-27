@@ -40,8 +40,8 @@
     },
     {
       "path": "dist/cli.js",
-      "digest": "b4451df713d8b0ecf4b1c98d8330b9fbe6bf3bf12f735431758e03106e3ff80b",
-      "size": 19765
+      "digest": "f11be285f83b203127a0a05ef5a12ae84ea4215df1c8449a54bff3f9c7ce6f46",
+      "size": 22561
     },
     {
       "path": "dist/commands.d.ts",
@@ -60,8 +60,8 @@
     },
     {
       "path": "dist/config.js",
-      "digest": "a0b23bbd0b64d987ee470b2cd29d136b1023b9d1dc2f6165193b82bc8213c587",
-      "size": 9943
+      "digest": "3ca55d1e34c3d647f588c282edbce14c7b238609285b3140c43a08da8c43ea32",
+      "size": 10008
     },
     {
       "path": "dist/conformance.d.ts",
@@ -75,13 +75,13 @@
     },
     {
       "path": "dist/controller.d.ts",
-      "digest": "d33ed4d3ecbc1e9325b67afed852a4f6008ea5b2d465bc4db638fa9ad41f3dbc",
-      "size": 3363
+      "digest": "b1943956b4c50c8b923833da5e613b9fb5a40a605b1b4de94bf1f4134806fe67",
+      "size": 3752
     },
     {
       "path": "dist/controller.js",
-      "digest": "e1efa16272961c988622faabcdfe067bc4244fbca05b5df75b4a5e2c28005dd6",
-      "size": 81848
+      "digest": "18e5458273fcc0fb5f2e82909c837adfef8e0dfa7fe1c4c15bf9848525b3aeb6",
+      "size": 86750
     },
     {
       "path": "dist/distribution/export.d.ts",
@@ -120,28 +120,38 @@
     },
     {
       "path": "dist/distribution/managed.js",
-      "digest": "2251f0912baad72f4c1b0dffa233093b58acb8b56b843a752e38eb263490e541",
-      "size": 14588
+      "digest": "baf77e61caca975b541b0b2a601cf1697302c870ee4b4fdb6daf96645ef504bc",
+      "size": 13270
+    },
+    {
+      "path": "dist/distribution/manager-contract.d.ts",
+      "digest": "dfb98d52b9965e93ed370bb16bf4475a378c37a797b32453ab7a68dae5320561",
+      "size": 6046
+    },
+    {
+      "path": "dist/distribution/manager-contract.js",
+      "digest": "9ed153123ee0f68adf8e3583576a1eb64f5c58eaf9474583d76cdb345ec99992",
+      "size": 5987
     },
     {
       "path": "dist/distribution/ticket-skill.d.ts",
-      "digest": "44e63673943d0bfd7dac86306c77c412316614b8bdb38766fe18663fc8643164",
-      "size": 3301
+      "digest": "60a95aeca5c022167c73305c9530e473e3c05506d4d1d038917c041c193c353c",
+      "size": 3435
     },
     {
       "path": "dist/distribution/ticket-skill.js",
-      "digest": "fbbb66976ace82826f05ea26d0391272affdb59685fb7e37743f9f2a7b3247a6",
-      "size": 3268
+      "digest": "a462169826e1f886af5cd17e712754441bda018d58b7ef5a7aba5f35f5c121f7",
+      "size": 3402
     },
     {
       "path": "dist/domain.d.ts",
-      "digest": "557fcfaa58600e4da235cdf25047ce6b93af01af8e73af7426c6b171f15bcde4",
-      "size": 5220
+      "digest": "b753bee88dbd81968060d57cc9577a5472d895cb09354aab0918a87c1ca5be9a",
+      "size": 5236
     },
     {
       "path": "dist/domain.js",
-      "digest": "e34c51451642926199214aafc8b88f196862307a2c7b3a5cd5d4675664c49458",
-      "size": 5493
+      "digest": "32a41a5f75f092d4159edf009adfc4a42b8e6fb792b0116db9dbc0204d23f814",
+      "size": 5513
     },
     {
       "path": "dist/git.d.ts",
@@ -202,6 +212,16 @@
       "path": "dist/host/notification.js",
       "digest": "9a46a0e6b8cf3d86b7f5bf9b04c140c851339b1bbe715cd3822383d3ed17260f",
       "size": 315
+    },
+    {
+      "path": "dist/host/workspace-registry.d.ts",
+      "digest": "0414054668b7722319d632867dd36bdcb571029e574387402931dfc14f934b93",
+      "size": 412
+    },
+    {
+      "path": "dist/host/workspace-registry.js",
+      "digest": "912d307b9451a8ed3af5f304ac0ca0ca3dc0b05a29be7ec0558fe8ab2a77faac",
+      "size": 5018
     },
     {
       "path": "dist/integrations/github.d.ts",
@@ -395,13 +415,13 @@
     },
     {
       "path": "dist/store.d.ts",
-      "digest": "13b4c8aaf63db25cc7cde16069590fe4dcb111309c5561d29535638d11b25cc2",
-      "size": 8527
+      "digest": "4e499156a1b8115f59d559fdde05073c23c899558568f14fdfa4ac121deb4c15",
+      "size": 9160
     },
     {
       "path": "dist/store.js",
-      "digest": "038440c1a61bb63897dc2c86d8bd3b17215437115bb5e9a0422511250517fb32",
-      "size": 40596
+      "digest": "468cfb88563063985728ad0bb795f3a6206ad09b1f126fb9baac1932e7e01f0e",
+      "size": 46510
     },
     {
       "path": "dist/verification.d.ts",
@@ -415,13 +435,18 @@
     },
     {
       "path": "docs/adapting-a-repository.md",
-      "digest": "7a2d9dd15d848096b53806fb8ef057330c4110fefceefce033bda0a6e385c854",
-      "size": 11604
+      "digest": "29f9edfdf76da8536ce02eb4aa7fda50b4b03cc0604bdc1dd5548fba896a8953",
+      "size": 12354
     },
     {
       "path": "docs/architecture.md",
       "digest": "e0770676912e050e0446df7bd35de0f97bde22f6d12e17924e1da7c1df86311b",
       "size": 1262
+    },
+    {
+      "path": "docs/engineering-manager.md",
+      "digest": "dc26dd2465d638ed5fea5e0b621d12122250cee184ae65c5c4ea46d5a180fa3a",
+      "size": 3844
     },
     {
       "path": "docs/knowledge-evaluation.md",
@@ -435,8 +460,8 @@
     },
     {
       "path": "docs/operations.md",
-      "digest": "462e151dc42e3e2c89bcd07ec240e9e932ccd9de82f00563d80434e08d033d9e",
-      "size": 12041
+      "digest": "b108bd24f24f7dca8a99d53250d512169bebf4bb65f6f512eca469b3f85b9e5e",
+      "size": 13064
     },
     {
       "path": "docs/portable-publication.md",
@@ -445,8 +470,8 @@
     },
     {
       "path": "docs/private-intake.md",
-      "digest": "8b6d0a28fe5f0b83ff8aadbaa1b7764b4f13811b9d83e6e4ab542d536e1de604",
-      "size": 3443
+      "digest": "df39dcaa87e007315de7a2e11dd5ec42b697d0fe22c384e6f4efe2761a6c812b",
+      "size": 3690
     },
     {
       "path": "knowledge/audit.json",
@@ -545,8 +570,8 @@
     },
     {
       "path": "README.md",
-      "digest": "288abf613871f85bc4ac61ba17f3148ece4c433620338b2a448c49a1f70c088e",
-      "size": 8525
+      "digest": "615631e363effa52bfc443bc895a371302fe865469cfa4232741146b2b621ed6",
+      "size": 8771
     },
     {
       "path": "scripts/ingest-sources.py",
@@ -570,8 +595,8 @@
     },
     {
       "path": "src/cli.ts",
-      "digest": "4e9a7993264e21f896f6f0fbc1563fff23348dd5aa07635b37a26ca055df99fe",
-      "size": 18317
+      "digest": "076dc1dff11980fa3bffcafa023f1ba89ddb5342deb25fe4ef2154f90bdbf97a",
+      "size": 20777
     },
     {
       "path": "src/commands.ts",
@@ -580,8 +605,8 @@
     },
     {
       "path": "src/config.ts",
-      "digest": "90a6bfb08ec983cd7febdbf37f66a81de5e114179bb883304adce3ceae3b656e",
-      "size": 9808
+      "digest": "e88d606b717f9fc902e8cb48d7cf1fbaa98bb489ec47dec8b6d27025e95d89d4",
+      "size": 9867
     },
     {
       "path": "src/conformance.ts",
@@ -590,8 +615,8 @@
     },
     {
       "path": "src/controller.ts",
-      "digest": "9dfcfeb43f25998d33108d88d6a8ed955806c2c83bf8af90314d59d33f8566cd",
-      "size": 77581
+      "digest": "46f976160c543ff1aacb3c94f7e1230bf0e8091eed2dbcf8a7c743d6f5fd67c3",
+      "size": 82510
     },
     {
       "path": "src/distribution/export.ts",
@@ -610,18 +635,23 @@
     },
     {
       "path": "src/distribution/managed.ts",
-      "digest": "5b562cdd5007d4a1920ed1b3b601dc2f8399fe10acee6a6330418229e8ea84ed",
-      "size": 15993
+      "digest": "b15d407287c8d59775dfed35a17bf0383520bf8ea4b5ca214f48bc2ff554fc9c",
+      "size": 14656
+    },
+    {
+      "path": "src/distribution/manager-contract.ts",
+      "digest": "c75c502706e70f43d3f4109304b3851b586176b60387f46cbf5164b2c5f517e1",
+      "size": 5989
     },
     {
       "path": "src/distribution/ticket-skill.ts",
-      "digest": "fbbb66976ace82826f05ea26d0391272affdb59685fb7e37743f9f2a7b3247a6",
-      "size": 3268
+      "digest": "a462169826e1f886af5cd17e712754441bda018d58b7ef5a7aba5f35f5c121f7",
+      "size": 3402
     },
     {
       "path": "src/domain.ts",
-      "digest": "83365fc5e5521a8e6d102327c350714e4c429a9858ee888a29ab8a9eff266fd0",
-      "size": 6052
+      "digest": "5b798fcc633c32f5458e242a2fb8728a5c61f63a0e29e0e93b6d88e2b8b8566b",
+      "size": 6070
     },
     {
       "path": "src/git.ts",
@@ -652,6 +682,11 @@
       "path": "src/host/notification.ts",
       "digest": "42dcbe34648be405f611bf609a5727ad304fc9c73254d648520ef512d4ceb727",
       "size": 352
+    },
+    {
+      "path": "src/host/workspace-registry.ts",
+      "digest": "ed3b435ee25598e5bad4431ae3ecaab0b6c7af2f452d8024c96afd20a2880b01",
+      "size": 5316
     },
     {
       "path": "src/integrations/github.ts",
@@ -750,8 +785,8 @@
     },
     {
       "path": "src/store.ts",
-      "digest": "f5b1e9e67a0ceaa7b910031754a9f0cd072999df3b3b459e847b56819f26f4c4",
-      "size": 42510
+      "digest": "0458f642a0d43a989f36cb3b73043fcba8bff5251008b79ba71cf647aba54a6c",
+      "size": 48371
     },
     {
       "path": "src/verification.ts",
@@ -775,8 +810,8 @@
     },
     {
       "path": "test/controller-fixture.test.ts",
-      "digest": "210bfa612be8dcddd91efd03fb126b943477715c22c4bc0c5f2601d54bca46d8",
-      "size": 19262
+      "digest": "101263ea3ba163fde0e079974cc06234b66c479c89a6b9ebcaa195225973548c",
+      "size": 19717
     },
     {
       "path": "test/controller-routing.test.ts",
@@ -810,8 +845,8 @@
     },
     {
       "path": "test/integrations.test.ts",
-      "digest": "0edfd6d8b765964eb030f3b5dd2000004d9c8838780152d040826d22a56ee984",
-      "size": 35872
+      "digest": "5dedf0f6acda148c68a609852fb37c1d7324a24fca7d41243089cc1fd5400b61",
+      "size": 35940
     },
     {
       "path": "test/knowledge-evaluation.test.ts",
@@ -827,6 +862,21 @@
       "path": "test/linear-mcp.test.ts",
       "digest": "8d4726d47001c091c43652582d56e0de54367b6353fc2d382e7835f4e7de9389",
       "size": 10434
+    },
+    {
+      "path": "test/manager-approval.test.ts",
+      "digest": "5986b7b4fa09ba8b7ecdb17680ce18725dbbf8bc520f84e15950565d2cb3acdb",
+      "size": 8688
+    },
+    {
+      "path": "test/manager-entrypoint.test.ts",
+      "digest": "d3a3dd91246185e326f98d92df50fb888990060e471286528fd5721ce4c268e7",
+      "size": 2669
+    },
+    {
+      "path": "test/migration-recovery.test.ts",
+      "digest": "80be0b9ad7a7a15ab080bf28e9ea4e674577812a6431a1206fd8bc8d43d960be",
+      "size": 3663
     },
     {
       "path": "test/operations.test.ts",
@@ -854,6 +904,11 @@
       "size": 9542
     },
     {
+      "path": "test/workspace-registry.test.ts",
+      "digest": "a5a6419328dd8d94b43e19e01affe75cf7982c8d8d0e3318c6e1f759e5ff0d2f",
+      "size": 6518
+    },
+    {
       "path": "tsconfig.build.json",
       "digest": "831733e4b4f60a63df0fdba88ea71dd89c3340661860be40fb84ded39df4f8fa",
       "size": 131
@@ -864,5 +919,5 @@
       "size": 385
     }
   ],
-  "manifestDigest": "61cf37d5dd65442c31ecf2b83cae02d149ca48ad67062d1f58ba4f8a12c00a7a"
+  "manifestDigest": "7ce95a92cec5b16502d3e09a307dc27de9b5818312a010c5a308a3475864f4e5"
 }

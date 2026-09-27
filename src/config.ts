@@ -240,6 +240,7 @@ export function configTemplate({
       workspaceId: "configure",
       assigneeId: "configure",
       readyLabel: "AI-ready",
+      intake: { mode: "private", automaticOthers: false },
       credential: { kind: "environment", name: "DELIVERY_LINEAR_TOKEN" },
     },
     github: {

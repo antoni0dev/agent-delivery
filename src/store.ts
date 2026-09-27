@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { chmodSync, mkdirSync } from "node:fs";
-import { dirname } from "node:path";
+import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
 import Database from "better-sqlite3";
 import { z } from "zod";
 import { type Artifact, readArtifact } from "./artifacts.js";
@@ -113,12 +113,53 @@ export class Store {
     mkdirSync(dirname(options.path), { recursive: true, mode: 0o700 });
     this.db = new Database(options.path);
     chmodSync(options.path, 0o600);
-    this.db.pragma("journal_mode = WAL");
     this.db.pragma("foreign_keys = ON");
     this.db.pragma("busy_timeout = 5000");
-    const version = z.number().parse(this.db.pragma("user_version", { simple: true }));
-    if (version > 2) throw new DeliveryError("State database was created by a newer release");
-    this.db.exec(`
+    try {
+      this.db
+        .transaction(() => {
+          const version = z.number().parse(this.db.pragma("user_version", { simple: true }));
+          if (version > 3) throw new DeliveryError("State database was created by a newer release");
+          if (version > 0) {
+            const workspace = settingsSchema.parse(this.db.prepare("SELECT * FROM settings").get());
+            if (workspace.workspace_id !== options.workspaceId)
+              throw new DeliveryError("State belongs to another workspace");
+            if (version < 3) {
+              const hasControllerLock =
+                this.db
+                  .prepare(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='controller_lock'",
+                  )
+                  .get() !== undefined &&
+                this.db.prepare("SELECT 1 FROM controller_lock LIMIT 1").get() !== undefined;
+              const unfinished =
+                this.db
+                  .prepare("SELECT 1 FROM invocations WHERE termination_confirmed=0 LIMIT 1")
+                  .get() !== undefined;
+              if (workspace.active !== 0 || unfinished || hasControllerLock)
+                throw new DeliveryError(
+                  "State migration requires the previous release to pause intake and drain all controllers and invocations",
+                  "blocked",
+                );
+              const backupDirectory = join(dirname(options.path), "migration-backups");
+              mkdirSync(backupDirectory, { recursive: true, mode: 0o700 });
+              chmodSync(backupDirectory, 0o700);
+              const backupPath = join(
+                backupDirectory,
+                `${basename(options.path)}.v${version}-to-v3.${randomUUID()}.sqlite`,
+              );
+              writeFileSync(backupPath, this.db.serialize(), { mode: 0o600, flag: "wx" });
+              const backup = new Database(backupPath);
+              try {
+                backup.pragma("journal_mode = DELETE");
+                if (backup.pragma("integrity_check", { simple: true }) !== "ok")
+                  throw new DeliveryError("Pre-migration snapshot failed integrity validation");
+              } finally {
+                backup.close();
+              }
+            }
+          }
+          this.db.exec(`
       CREATE TABLE IF NOT EXISTS settings (workspace_id TEXT PRIMARY KEY, host_id TEXT, active INTEGER NOT NULL DEFAULT 0, config_digest TEXT, profile TEXT, conformance_digest TEXT);
       CREATE TABLE IF NOT EXISTS initiatives (id TEXT PRIMARY KEY, issue_id TEXT NOT NULL UNIQUE, project_id TEXT NOT NULL, parent_id TEXT REFERENCES initiatives(id), owner_id TEXT NOT NULL, profile TEXT NOT NULL, state TEXT NOT NULL, stage TEXT NOT NULL, reason TEXT, plan_digest TEXT, accepted_plan_digest TEXT, plan_rounds INTEGER NOT NULL DEFAULT 0, repair_rounds INTEGER NOT NULL DEFAULT 0, no_progress INTEGER NOT NULL DEFAULT 0, checkpoint TEXT NOT NULL DEFAULT '{}', issue_snapshot TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS invocations (id TEXT PRIMARY KEY, initiative_id TEXT NOT NULL REFERENCES initiatives(id), role TEXT NOT NULL, profile TEXT NOT NULL, worktree TEXT NOT NULL, status TEXT NOT NULL, pid INTEGER, native_session TEXT, requested_model TEXT NOT NULL, actual_model TEXT, started_at TEXT NOT NULL, finished_at TEXT, termination_confirmed INTEGER NOT NULL DEFAULT 0, result_path TEXT, result_digest TEXT);
@@ -127,6 +168,7 @@ export class Store {
       CREATE TABLE IF NOT EXISTS resources (name TEXT PRIMARY KEY, invocation_id TEXT NOT NULL REFERENCES invocations(id));
       CREATE TABLE IF NOT EXISTS evidence (id TEXT PRIMARY KEY, initiative_id TEXT NOT NULL REFERENCES initiatives(id), requirement_id TEXT NOT NULL, kind TEXT NOT NULL, sequence INTEGER NOT NULL, binding_digest TEXT NOT NULL, binding TEXT NOT NULL, producer_id TEXT NOT NULL REFERENCES invocations(id), status TEXT NOT NULL, artifact_path TEXT, artifact_digest TEXT, started_at TEXT NOT NULL, completed_at TEXT, UNIQUE(initiative_id,requirement_id,sequence));
       CREATE TABLE IF NOT EXISTS operations (key TEXT PRIMARY KEY, intent_digest TEXT NOT NULL, status TEXT NOT NULL, remote_id TEXT, payload TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS plan_approvals (initiative_id TEXT PRIMARY KEY REFERENCES initiatives(id), plan_digest TEXT, config_digest TEXT, approved_at TEXT);
       CREATE TABLE IF NOT EXISTS events (sequence INTEGER PRIMARY KEY AUTOINCREMENT, initiative_id TEXT, kind TEXT NOT NULL, detail TEXT NOT NULL, at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS workspace_identity (slot INTEGER PRIMARY KEY CHECK(slot=1),tracker TEXT NOT NULL,organization TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS project_bindings (project_id TEXT PRIMARY KEY,repository TEXT NOT NULL UNIQUE);
@@ -136,18 +178,27 @@ export class Store {
       CREATE TABLE IF NOT EXISTS intake_observations (scope TEXT NOT NULL, issue_id TEXT NOT NULL, pending INTEGER NOT NULL, PRIMARY KEY(scope,issue_id));
       CREATE TABLE IF NOT EXISTS controller_lock (slot INTEGER PRIMARY KEY CHECK(slot=1), host_id TEXT NOT NULL, pid INTEGER NOT NULL, identity TEXT NOT NULL);
     `);
-    const columns = z
-      .array(z.object({ name: z.string() }))
-      .parse(this.db.prepare("PRAGMA table_info(invocations)").all());
-    if (!columns.some((column) => column.name === "process_start"))
-      this.db.exec("ALTER TABLE invocations ADD COLUMN process_start TEXT");
-    this.db.pragma("user_version=2");
-    const workspace = this.db.prepare("SELECT * FROM settings").get();
-    if (workspace) {
-      if (settingsSchema.parse(workspace).workspace_id !== options.workspaceId)
-        throw new DeliveryError("State belongs to another workspace");
-    } else
-      this.db.prepare("INSERT INTO settings(workspace_id) VALUES (?)").run(options.workspaceId);
+          const columns = z
+            .array(z.object({ name: z.string() }))
+            .parse(this.db.prepare("PRAGMA table_info(invocations)").all());
+          if (!columns.some((column) => column.name === "process_start"))
+            this.db.exec("ALTER TABLE invocations ADD COLUMN process_start TEXT");
+          this.db.pragma("user_version=3");
+          const workspace = this.db.prepare("SELECT * FROM settings").get();
+          if (workspace) {
+            if (settingsSchema.parse(workspace).workspace_id !== options.workspaceId)
+              throw new DeliveryError("State belongs to another workspace");
+          } else
+            this.db
+              .prepare("INSERT INTO settings(workspace_id) VALUES (?)")
+              .run(options.workspaceId);
+        })
+        .immediate();
+      this.db.pragma("journal_mode = WAL");
+    } catch (error) {
+      this.db.close();
+      throw error;
+    }
   }
   close(): void {
     this.db.close();
@@ -294,6 +345,7 @@ export class Store {
     projectId: string;
     profile: Profile;
     parentId?: string;
+    humanApproval?: "required";
   }): Initiative {
     return this.db
       .transaction(() => {
@@ -301,6 +353,10 @@ export class Store {
           throw new DeliveryError("Issue is reserved for manual work");
         const previous = this.findByIssue(input.issue.id);
         if (previous) {
+          if (input.humanApproval === "required" && this.planApproval(previous.id) === null)
+            throw new DeliveryError(
+              "Existing initiative was not started with human approval; do not change its execution contract implicitly",
+            );
           if (
             previous.project_id !== input.projectId ||
             previous.profile !== input.profile ||
@@ -350,6 +406,8 @@ export class Store {
             now,
             now,
           );
+        if (input.humanApproval === "required")
+          this.db.prepare("INSERT INTO plan_approvals(initiative_id) VALUES (?)").run(id);
         return this.get(id);
       })
       .immediate();
@@ -454,6 +512,7 @@ export class Store {
     issue: Issue;
     projectId: string;
     profile: Profile;
+    humanApproval?: "required";
     activation: { hostId: string; configDigest: string };
   }): Initiative {
     return this.db
@@ -486,6 +545,65 @@ export class Store {
         input.id,
       );
   }
+  recordApprovalNotification(input: {
+    id: string;
+    ownerId: string;
+    planDigest: string;
+    contextDigest: string;
+    channel: "desktop" | "linear";
+  }): void {
+    const path =
+      input.channel === "desktop" ? "$.approvalDesktopNotified" : "$.approvalLinearNotified";
+    this.db
+      .prepare(
+        "UPDATE initiatives SET checkpoint=json_set(checkpoint,?,json('true')) WHERE id=? AND owner_id=? AND accepted_plan_digest=? AND json_extract(checkpoint,'$.approvalContext.digest')=?",
+      )
+      .run(path, input.id, input.ownerId, input.planDigest, input.contextDigest);
+  }
+  planApproval(id: string) {
+    const row = this.db
+      .prepare(
+        "SELECT plan_digest,config_digest,approved_at FROM plan_approvals WHERE initiative_id=?",
+      )
+      .get(id);
+    return row === undefined
+      ? null
+      : z
+          .object({
+            plan_digest: z.string().nullable(),
+            config_digest: z.string().nullable(),
+            approved_at: z.string().nullable(),
+          })
+          .parse(row);
+  }
+  approvePlan(input: { id: string; digest: string; hostId: string; configDigest: string }): void {
+    this.db
+      .transaction(() => {
+        this.assertActive(input);
+        const task = this.get(input.id);
+        if (
+          task.state !== "waiting" ||
+          task.stage !== "approve-plan" ||
+          task.accepted_plan_digest !== input.digest ||
+          task.plan_digest !== input.digest ||
+          this.planApproval(input.id)?.plan_digest !== input.digest ||
+          this.planApproval(input.id)?.config_digest !== input.configDigest
+        )
+          throw new DeliveryError("No matching published plan awaits human approval");
+        this.db
+          .prepare(
+            "UPDATE plan_approvals SET plan_digest=?,config_digest=?,approved_at=? WHERE initiative_id=?",
+          )
+          .run(input.digest, input.configDigest, new Date().toISOString(), input.id);
+        this.update({ id: input.id, state: "queued", stage: "approve-plan", reason: null });
+        this.event({
+          initiativeId: input.id,
+          kind: "human-plan-approved",
+          detail: { digest: input.digest, configDigest: input.configDigest },
+        });
+      })
+      .immediate();
+  }
   recordPlan(input: { id: string; digest: string }): void {
     this.db
       .transaction(() => {
@@ -495,18 +613,29 @@ export class Store {
           throw new DeliveryError("Cannot change plan while an invocation is running");
         this.db
           .prepare(
+            "UPDATE plan_approvals SET plan_digest=NULL,config_digest=NULL,approved_at=NULL WHERE initiative_id=?",
+          )
+          .run(input.id);
+        this.db
+          .prepare(
             "UPDATE initiatives SET plan_digest=?,accepted_plan_digest=NULL,plan_rounds=plan_rounds+1 WHERE id=?",
           )
           .run(input.digest, input.id);
       })
       .immediate();
   }
-  acceptPlan(input: { id: string; digest: string }): void {
+  acceptPlan(input: { id: string; digest: string; configDigest?: string }): void {
     if (this.get(input.id).plan_digest !== input.digest)
       throw new DeliveryError("Cannot accept a stale plan");
     this.db
       .prepare("UPDATE initiatives SET accepted_plan_digest=? WHERE id=?")
       .run(input.digest, input.id);
+    if (input.configDigest !== undefined)
+      this.db
+        .prepare(
+          "UPDATE plan_approvals SET plan_digest=?,config_digest=?,approved_at=NULL WHERE initiative_id=?",
+        )
+        .run(input.digest, input.configDigest, input.id);
   }
   repair(id: string): void {
     const current = this.get(id);
@@ -767,6 +896,11 @@ export class Store {
           throw new DeliveryError(
             "Existing child assignments must be reconciled before parent replanning",
           );
+        this.db
+          .prepare(
+            "UPDATE plan_approvals SET plan_digest=NULL,config_digest=NULL,approved_at=NULL WHERE initiative_id=?",
+          )
+          .run(id);
         this.event({
           initiativeId: id,
           kind: "plan-invalidated",

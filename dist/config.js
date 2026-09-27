@@ -207,6 +207,7 @@ export function configTemplate({ root, stateDirectory, knowledgeRoot, }) {
             workspaceId: "configure",
             assigneeId: "configure",
             readyLabel: "AI-ready",
+            intake: { mode: "private", automaticOthers: false },
             credential: { kind: "environment", name: "DELIVERY_LINEAR_TOKEN" },
         },
         github: {

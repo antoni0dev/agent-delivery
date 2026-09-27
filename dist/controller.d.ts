@@ -73,7 +73,17 @@ export declare class Controller {
         newOwner: string;
         profile: Profile;
     }): Promise<unknown>;
-    run({ issueId, projectId, profile, }: {
+    manage(input: {
+        issueId: string;
+        projectId: string;
+        profile?: Profile;
+    }): Promise<unknown>;
+    approvePlan(input: {
+        id: string;
+        digest: string;
+    }): void;
+    run({ issueId, projectId, profile, humanApproval, }: {
+        humanApproval?: "required";
         issueId: string;
         projectId: string;
         profile: Profile;
@@ -90,7 +100,10 @@ export declare class Controller {
     private recover;
     private validate;
     private planTask;
+    private approvalContext;
+    private assertApprovalContext;
     private challenge;
+    private dispatchPlan;
     private implement;
     private prepareQa;
     private publishCandidate;
@@ -98,6 +111,7 @@ export declare class Controller {
     private verify;
     private merge;
     private accept;
+    private recordApprovalNotification;
     private notifyDecision;
     private notifyCompletion;
 }

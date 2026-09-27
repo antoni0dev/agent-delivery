@@ -2,7 +2,7 @@ import { z } from "zod";
 export declare const profiles: readonly ["codex", "claude-code", "cursor"];
 export declare const roles: readonly ["planner", "planCritic", "implementer", "reviewer", "browserVerifier"];
 export declare const states: readonly ["queued", "running", "waiting", "blocked", "completed", "cancelled"];
-export declare const stages: readonly ["validate", "plan", "challenge", "implement", "prepare-qa", "review", "verify", "merge", "accept"];
+export declare const stages: readonly ["validate", "plan", "challenge", "approve-plan", "implement", "prepare-qa", "review", "verify", "merge", "accept"];
 export type Profile = (typeof profiles)[number];
 export type Role = (typeof roles)[number];
 export type State = (typeof states)[number];

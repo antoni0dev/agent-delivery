@@ -982,6 +982,7 @@ test("GitHub mutation network loss is uncertain and is never retried", async () 
 
 test("GraphQL intake filters terminal history at the server and preserves label mode", async () => {
   const { config, project } = fixture();
+  config.linear.intake = { mode: "label", automaticOthers: false };
   const filters: unknown[] = [];
   const scriptedFetch: typeof fetch = async (_url, init) => {
     const body = graphRequest(init);

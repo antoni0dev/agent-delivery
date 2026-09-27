@@ -16,6 +16,7 @@ import { z } from "zod";
 import { DeliveryError } from "../domain.js";
 import { defaultApplicationSupportDirectory } from "../host/identity.js";
 import { collectPortableFiles, copyDistributionFiles, fileDigest } from "./files.js";
+import { managerEntrypoint, managerRuleEntrypoint } from "./manager-contract.js";
 import { ticketShapingSkill } from "./ticket-skill.js";
 
 const ownedFileSchema = z
@@ -63,35 +64,18 @@ const runStagedCommand: StagedCommandRunner = (executable, args, options) =>
 const digestJson = (value: unknown): string =>
   createHash("sha256").update(JSON.stringify(value)).digest("hex");
 
-const adapterContent = Object.freeze({
-  codex: `---
-name: agent-delivery
-description: Operate the local agent delivery controller for an explicitly configured workspace.
----
-
-Use the \`delivery\` CLI for controller operations. Require the workspace config path. For a new interactive assignment, pass \`--profile codex\` to \`delivery run\`. Existing assignments retain their recorded profile until an explicit handoff. Scheduled intake uses the workspace's persisted intake profile. Treat controller output as the workflow authority; do not duplicate its rules in runtime prompts.
-`,
-  claude: `---
-name: agent-delivery
-description: Operate the local agent delivery controller for an explicitly configured workspace.
----
-
-Use the \`delivery\` CLI for controller operations. Require the workspace config path. For a new interactive assignment, pass \`--profile claude-code\` to \`delivery run\`. Existing assignments retain their recorded profile until an explicit handoff. Scheduled intake uses the workspace's persisted intake profile. Treat controller output as the workflow authority; do not duplicate its rules in runtime prompts.
-`,
-  cursor: `---
-description: Agent delivery controller integration
-globs:
-alwaysApply: false
----
-
-Use the \`delivery\` CLI for controller operations in an explicitly configured workspace. For a new interactive assignment, pass \`--profile cursor\` to \`delivery run\`. Existing assignments retain their recorded profile until an explicit handoff. Scheduled intake uses the workspace's persisted intake profile. Treat controller output as the workflow authority; do not duplicate its rules in runtime prompts.
-`,
-});
-
 export const defaultManagedRoot = (): string =>
   join(defaultApplicationSupportDirectory(), "managed");
 
 export const defaultAdapterFiles = (): ReadonlyArray<{ path: string; content: string }> => [
+  {
+    path: join(homedir(), ".cursor", "skills", "agent-delivery", "SKILL.md"),
+    content: managerEntrypoint,
+  },
+  {
+    path: join(homedir(), ".cursor", "skills", "shape-linear-ticket", "SKILL.md"),
+    content: ticketShapingSkill,
+  },
   {
     path: join(homedir(), ".codex", "skills", "shape-linear-ticket", "SKILL.md"),
     content: ticketShapingSkill,
@@ -106,15 +90,15 @@ export const defaultAdapterFiles = (): ReadonlyArray<{ path: string; content: st
   },
   {
     path: join(homedir(), ".codex", "skills", "agent-delivery", "SKILL.md"),
-    content: adapterContent.codex,
+    content: managerEntrypoint,
   },
   {
     path: join(homedir(), ".claude", "skills", "agent-delivery", "SKILL.md"),
-    content: adapterContent.claude,
+    content: managerEntrypoint,
   },
   {
     path: join(homedir(), ".cursor", "rules", "agent-delivery.mdc"),
-    content: adapterContent.cursor,
+    content: managerRuleEntrypoint,
   },
 ];
 

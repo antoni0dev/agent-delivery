@@ -1,5 +1,7 @@
 # Private ticket intake
 
+New configurations use private explicit handoff with automatic intake disabled. The [shared manager](engineering-manager.md) presents a challenged plan for human approval before dispatching implementation. Existing label-mode configurations remain supported.
+
 Set `linear.intake` to `{ "mode": "private", "automaticOthers": true }` to stop requiring a tracker label. Keep `readyLabel` for backward-compatible label mode. Omitting `intake` preserves existing label behavior. Set `automaticOthers` to false for explicit starts only.
 
 | Intent | Result |
@@ -17,7 +19,7 @@ Private mode does not relax scope, assignee, accepted-plan, independent review, 
 Run from the correct company context:
 
 ```sh
-delivery run --config <workspace-config> --project <project-id> --issue <issue-id> --profile codex
+delivery manage --config <workspace-config> --project <project-id> --issue <issue-id>
 delivery manual --config <workspace-config> --project <project-id> --issue <issue-id> --action reserve
 delivery manual --config <workspace-config> --project <project-id> --issue <issue-id> --action release
 ```

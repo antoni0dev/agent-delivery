@@ -22,6 +22,7 @@ declare const initiativeSchema: z.ZodObject<{
     }>;
     stage: z.ZodEnum<{
         accept: "accept";
+        "approve-plan": "approve-plan";
         challenge: "challenge";
         implement: "implement";
         merge: "merge";
@@ -171,6 +172,7 @@ export declare class Store {
         projectId: string;
         profile: Profile;
         parentId?: string;
+        humanApproval?: "required";
     }): Initiative;
     isManual(issueId: string): boolean;
     hasManualOwner(id: string): boolean;
@@ -192,6 +194,7 @@ export declare class Store {
         issue: Issue;
         projectId: string;
         profile: Profile;
+        humanApproval?: "required";
         activation: {
             hostId: string;
             configDigest: string;
@@ -204,6 +207,24 @@ export declare class Store {
         reason: string | null;
         checkpoint?: unknown;
     }): void;
+    recordApprovalNotification(input: {
+        id: string;
+        ownerId: string;
+        planDigest: string;
+        contextDigest: string;
+        channel: "desktop" | "linear";
+    }): void;
+    planApproval(id: string): {
+        plan_digest: string | null;
+        config_digest: string | null;
+        approved_at: string | null;
+    } | null;
+    approvePlan(input: {
+        id: string;
+        digest: string;
+        hostId: string;
+        configDigest: string;
+    }): void;
     recordPlan(input: {
         id: string;
         digest: string;
@@ -211,6 +232,7 @@ export declare class Store {
     acceptPlan(input: {
         id: string;
         digest: string;
+        configDigest?: string;
     }): void;
     repair(id: string): void;
     progress(input: {

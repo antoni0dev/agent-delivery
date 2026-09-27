@@ -11,9 +11,9 @@ Keep detailed ticket shaping in the discussion session. Give the portfolio manag
 4. A request to create a ticket authorizes that ticket, not implementation. Read back the created issue and retain its stable ID. If creation has an uncertain result, find the issue before retrying. Do not create labels or change team workflow settings.
 5. A request to create and start a ticket authorizes explicit delivery handoff after publication. In a workspace configured with private intake, use:
 
-   delivery run --config <workspace-config> --project <configured-project> --issue <issue-id> --profile <selected-runtime>
+   delivery manage --config <workspace-config> --project <configured-project> --issue <issue-id>
 
-   Use the workspace's permitted profile, never a silent model/provider substitution. Do not start a second owner when an existing initiative, session, branch or PR already owns the issue. A paused or blocked controller means the ticket is created but execution is not started; report the specific prerequisite.
+   Use the workspace's recorded execution profile independently of the conversational client, never a silent model/provider substitution. Follow delivery manager-guide; present the published plan and obtain explicit approval before approve-plan. Do not start a second owner when an existing initiative, session, branch or PR already owns the issue. A paused or blocked controller means the ticket is created but execution is not started; report the specific prerequisite.
 6. When the user says they will handle a ticket, reserve it privately:
 
    delivery manual --config <workspace-config> --project <configured-project> --issue <issue-id> --action reserve

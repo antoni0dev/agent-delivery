@@ -17,6 +17,10 @@ delivery evaluate --config <path> --profile codex|claude-code|cursor
 delivery transfer-host --config <path> --to <host-id>
 delivery activate --config <path>
 delivery tick --config <path>
+delivery manager-guide
+delivery locate --root <repository>
+delivery manage --config <path> --issue <id> --project <id> [--profile <profile>]
+delivery approve-plan --config <path> --initiative <id> --digest <plan-digest>
 delivery run --config <path> --issue <id> --project <id> --profile <profile>
 delivery status --config <path>
 delivery pause --config <path>
@@ -30,7 +34,7 @@ delivery upgrade --config <path>
 delivery export --output <path> [--draft]
 ```
 
-Interactive `run` requires an explicit runtime profile. Scheduled intake uses the saved intake profile. Arguments are strict. Unknown options and extra positional values fail. Successful commands emit one compact JSON value on stdout. Failures emit a redacted JSON error on stderr and exit nonzero. The store closes in a `finally` path for every controller command.
+Manager `manage` uses the recorded workspace execution profile unless explicitly selected and waits for human plan approval before implementation. `approve-plan` binds the exact presented revision and queues continuation. The lower-level `run` retains pre-authorized execution semantics and requires an explicit runtime profile. Scheduled intake uses the saved intake profile. Arguments are strict. Unknown options and extra positional values fail. Successful commands emit one compact JSON value on stdout. Failures emit a redacted JSON error on stderr and exit nonzero. The store closes in a `finally` path for every controller command.
 
 `pause` stops admission and disables future launch agent starts without terminating the active controller. It does not claim that a running native process has terminated. `cancel` owns termination and confirmation for one initiative. `resume` reopens a nonterminal paused initiative through the controller's state rules. `replan` is an explicit operator revision after source, configuration, or scope changes. It preserves the prior request and plan event and refuses revision while existing children still need reconciliation.
 
@@ -53,6 +57,8 @@ Before pull request state is frozen, the controller prepares fresh QA through a 
 An inactive install does not activate the workspace or scheduler. The adapter fragments only direct each runtime to the `delivery` CLI. Workflow policy remains in the controller, so clients do not accumulate duplicated rule sets. Installation never edits shell startup files, `PATH`, a global `AGENTS.md`, runtime authentication, Git identity, repository settings, or user credential files. If `~/.local/bin` is not already on `PATH`, invoke the absolute `commandFile` returned by install.
 
 ## Upgrade and recovery
+
+Before a schema upgrade, use the currently installed CLI to pause and drain the workspace. Opening an older database with the new release requires inactive settings, confirmed invocation termination and no controller lock. The migration takes an exclusive write reservation and serializes an old-format SQLite snapshot into `migration-backups/` beside the state database before changing schema. Keep this snapshot with the old configuration for rollback to the previous binary; a later post-migration backup is not a substitute.
 
 `upgrade` first runs the same non-live doctor checks and verifies that any existing host and configuration binding matches the current host and config. It pauses intake and disables future scheduler starts before acquiring the workspace controller lock for backup, staging, and selection. A retry is allowed while the owning workspace remains inactive after an earlier failed upgrade. Upgrade refuses to continue while any invocation lacks confirmed termination. If an active controller still owns work, upgrade leaves intake paused and the previous version intact. Retry after that bounded work drains. There is no automatic mutation retry or forced process kill in upgrade.
 

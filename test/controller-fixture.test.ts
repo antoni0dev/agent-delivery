@@ -83,6 +83,7 @@ export type ControllerFixture = {
   config: WorkspaceConfig;
   store: Store;
   controller: Controller;
+  restartController: () => Controller;
   issue: Issue;
   runtimeCalls: RuntimeInput[];
   commandCalls: CommandInput[];
@@ -121,6 +122,9 @@ export function createControllerFixture({
   intake,
   preparation,
   strictPrTitle = false,
+  notifications = { linear: false, desktop: false },
+  desktop = () => undefined,
+  onNotify = () => undefined,
 }: {
   profile?: WorkspaceConfig["intakeRuntimeProfile"];
   planForIssue?: (issueId: string) => Plan;
@@ -133,6 +137,9 @@ export function createControllerFixture({
   intake?: WorkspaceConfig["linear"]["intake"];
   preparation?: WorkspaceConfig["projects"][number]["preparation"];
   strictPrTitle?: boolean;
+  notifications?: WorkspaceConfig["notifications"];
+  desktop?: (input: { message: string }) => void;
+  onNotify?: () => void;
 } = {}): ControllerFixture {
   const root = mkdtempSync(join(tmpdir(), "controller-lifecycle-"));
   const projectRoot = join(root, "repository");
@@ -204,7 +211,7 @@ export function createControllerFixture({
         },
       },
     ],
-    notifications: { linear: false, desktop: false },
+    notifications,
     liveEvidenceMaxAgeMs: 60 * 60 * 1000,
   });
 
@@ -422,7 +429,10 @@ export function createControllerFixture({
       const current = ensurePresent(issues.get(issueId), "Expected a known issue to complete");
       issues.set(issueId, issueSchema.parse({ ...current, labels: [], state: "Completed" }));
     },
-    notify: async ({ body }) => ({ id: "notification", body }),
+    notify: async ({ body }) => {
+      onNotify();
+      return { id: "notification", body };
+    },
   };
 
   const github: GithubPort = {
@@ -506,12 +516,13 @@ export function createControllerFixture({
     configDigest: configDigest(config),
     conformanceDigest: "fixture-conformance",
   });
-  const controller = new Controller({
+  const controllerInput = {
     config,
     store,
     hostId: "fixture-host",
     ...(intakeIntervalMs === undefined ? {} : { intakeIntervalMs }),
     services: {
+      desktop,
       runtime,
       command,
       acquireHeavy: () => ({ started: () => undefined, release: () => undefined }),
@@ -527,13 +538,15 @@ export function createControllerFixture({
         coverageStatus: "independent-audit-required",
       }),
     },
-  });
+  } satisfies ConstructorParameters<typeof Controller>[0];
+  const controller = new Controller(controllerInput);
 
   return {
     root,
     config,
     store,
     controller,
+    restartController: () => new Controller(controllerInput),
     issue,
     runtimeCalls,
     commandCalls,

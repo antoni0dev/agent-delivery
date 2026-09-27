@@ -1,0 +1,302 @@
+{
+  "schemaVersion": 1,
+  "topics": {
+    "accessibility": [
+      "ui-semantics-and-accessibility"
+    ],
+    "adoption": [
+      "practice-evidence-led-adoption"
+    ],
+    "authorization": [
+      "authorization-single-use-intents"
+    ],
+    "boundaries": [
+      "modules-public-contracts",
+      "types-boundary-validation",
+      "cache-identity-and-invalidation",
+      "storage-versioned-boundary",
+      "distributed-invariants-and-failure",
+      "encoding-reader-writer-compatibility",
+      "distributed-leases-and-fencing",
+      "dataflow-source-and-projection-contract",
+      "end-to-end-idempotency-and-integrity",
+      "data-privacy-purpose-and-retention",
+      "state-location-and-provider-contracts",
+      "authorization-single-use-intents"
+    ],
+    "cache": [
+      "cache-identity-and-invalidation",
+      "mutations-confirmed-reconciliation",
+      "realtime-snapshot-delta-contract",
+      "dataflow-source-and-projection-contract",
+      "realtime-subscription-lifecycle"
+    ],
+    "components": [
+      "components-cohesive-ownership",
+      "components-composition-contracts",
+      "queries-explicit-async-states",
+      "react-render-purity-and-identity",
+      "react-refs-and-commit-timing",
+      "ui-semantics-and-accessibility",
+      "component-error-boundaries",
+      "lazy-loading-boundaries",
+      "navigation-state-contracts",
+      "react-performance-evidence",
+      "custom-hooks-intent-boundaries",
+      "ui-branching-explicitness",
+      "component-style-ownership"
+    ],
+    "composition": [
+      "components-composition-contracts",
+      "component-style-ownership"
+    ],
+    "data": [
+      "distributed-replication-partitioning",
+      "dataflow-batch-stream-choice",
+      "functional-composition-pipelines",
+      "data-model-access-patterns",
+      "storage-index-workload-tradeoffs",
+      "data-transactional-versus-analytical",
+      "replication-session-and-failover-guarantees",
+      "replication-conflict-and-quorum-contract",
+      "partitioning-keys-indexes-and-rebalance",
+      "transactions-isolation-contract",
+      "transactions-lost-updates-and-cas",
+      "transactions-write-skew-and-phantoms",
+      "transactions-serializable-costs",
+      "consistency-ordering-and-coordination",
+      "consensus-versus-atomic-commit",
+      "batch-replay-and-publication",
+      "messaging-queue-versus-replay-log",
+      "dataflow-source-and-projection-contract",
+      "stream-event-time-and-joins",
+      "stream-checkpoints-and-effects",
+      "operations-audit-and-restore",
+      "data-privacy-purpose-and-retention"
+    ],
+    "distributed": [
+      "realtime-snapshot-delta-contract",
+      "distributed-invariants-and-failure",
+      "distributed-replication-partitioning",
+      "dataflow-batch-stream-choice",
+      "operations-load-and-tail-latency",
+      "replication-session-and-failover-guarantees",
+      "replication-conflict-and-quorum-contract",
+      "partitioning-keys-indexes-and-rebalance",
+      "transactions-isolation-contract",
+      "transactions-lost-updates-and-cas",
+      "transactions-write-skew-and-phantoms",
+      "transactions-serializable-costs",
+      "distributed-leases-and-fencing",
+      "consistency-ordering-and-coordination",
+      "consensus-versus-atomic-commit",
+      "batch-replay-and-publication",
+      "messaging-queue-versus-replay-log",
+      "stream-event-time-and-joins",
+      "stream-checkpoints-and-effects",
+      "end-to-end-idempotency-and-integrity",
+      "authorization-single-use-intents"
+    ],
+    "effects": [
+      "effects-external-sync",
+      "react-render-purity-and-identity",
+      "react-refs-and-commit-timing",
+      "custom-hooks-intent-boundaries",
+      "react-external-store-snapshots"
+    ],
+    "errors": [
+      "component-error-boundaries"
+    ],
+    "forms": [
+      "mutations-confirmed-reconciliation"
+    ],
+    "implementation": [
+      "effects-external-sync",
+      "components-cohesive-ownership",
+      "types-boundary-validation",
+      "queries-explicit-async-states",
+      "cache-identity-and-invalidation",
+      "mutations-confirmed-reconciliation",
+      "realtime-snapshot-delta-contract",
+      "storage-versioned-boundary",
+      "tests-risk-observable-behavior",
+      "react-refs-and-commit-timing",
+      "component-error-boundaries",
+      "lazy-loading-boundaries",
+      "functional-composition-pipelines",
+      "custom-hooks-intent-boundaries",
+      "ui-branching-explicitness",
+      "encoding-reader-writer-compatibility",
+      "transactions-lost-updates-and-cas",
+      "batch-replay-and-publication",
+      "stream-checkpoints-and-effects"
+    ],
+    "learning": [
+      "practice-evidence-led-adoption"
+    ],
+    "lifecycle": [
+      "lifecycle-readiness-and-user-feedback",
+      "realtime-subscription-lifecycle",
+      "react-external-store-snapshots"
+    ],
+    "modules": [
+      "modules-public-contracts",
+      "patterns-costed-selection",
+      "dependency-reproducibility",
+      "custom-hooks-intent-boundaries",
+      "component-style-ownership"
+    ],
+    "mutations": [
+      "mutations-confirmed-reconciliation",
+      "transactions-isolation-contract",
+      "transactions-lost-updates-and-cas",
+      "transactions-write-skew-and-phantoms",
+      "distributed-leases-and-fencing",
+      "stream-checkpoints-and-effects",
+      "end-to-end-idempotency-and-integrity",
+      "authorization-single-use-intents",
+      "lifecycle-readiness-and-user-feedback"
+    ],
+    "operations": [
+      "dependency-reproducibility",
+      "operations-load-and-tail-latency",
+      "operations-recovery-and-change",
+      "operations-audit-and-restore"
+    ],
+    "performance": [
+      "lazy-loading-boundaries",
+      "react-performance-evidence",
+      "operations-load-and-tail-latency",
+      "storage-index-workload-tradeoffs",
+      "transactions-serializable-costs",
+      "realtime-subscription-lifecycle"
+    ],
+    "planning": [
+      "state-single-owner",
+      "components-cohesive-ownership",
+      "components-composition-contracts",
+      "modules-public-contracts",
+      "realtime-snapshot-delta-contract",
+      "distributed-invariants-and-failure",
+      "distributed-replication-partitioning",
+      "dataflow-batch-stream-choice",
+      "patterns-costed-selection",
+      "lazy-loading-boundaries",
+      "navigation-state-contracts",
+      "operations-load-and-tail-latency",
+      "operations-recovery-and-change",
+      "data-model-access-patterns",
+      "storage-index-workload-tradeoffs",
+      "data-transactional-versus-analytical",
+      "replication-session-and-failover-guarantees",
+      "replication-conflict-and-quorum-contract",
+      "partitioning-keys-indexes-and-rebalance",
+      "transactions-isolation-contract",
+      "transactions-write-skew-and-phantoms",
+      "transactions-serializable-costs",
+      "distributed-leases-and-fencing",
+      "consistency-ordering-and-coordination",
+      "consensus-versus-atomic-commit",
+      "messaging-queue-versus-replay-log",
+      "dataflow-source-and-projection-contract",
+      "stream-event-time-and-joins",
+      "data-privacy-purpose-and-retention"
+    ],
+    "providers": [
+      "state-location-and-provider-contracts"
+    ],
+    "query": [
+      "queries-explicit-async-states",
+      "cache-identity-and-invalidation"
+    ],
+    "realtime": [
+      "realtime-snapshot-delta-contract",
+      "dataflow-batch-stream-choice",
+      "replication-session-and-failover-guarantees",
+      "messaging-queue-versus-replay-log",
+      "dataflow-source-and-projection-contract",
+      "stream-event-time-and-joins",
+      "stream-checkpoints-and-effects",
+      "realtime-subscription-lifecycle"
+    ],
+    "review": [
+      "state-single-owner",
+      "effects-external-sync",
+      "modules-public-contracts",
+      "types-boundary-validation",
+      "queries-explicit-async-states",
+      "mutations-confirmed-reconciliation",
+      "distributed-invariants-and-failure",
+      "tests-risk-observable-behavior",
+      "patterns-costed-selection",
+      "react-render-purity-and-identity",
+      "react-refs-and-commit-timing",
+      "ui-semantics-and-accessibility",
+      "component-error-boundaries",
+      "dependency-reproducibility",
+      "react-performance-evidence",
+      "ui-branching-explicitness",
+      "component-style-ownership",
+      "operations-recovery-and-change",
+      "data-model-access-patterns",
+      "storage-index-workload-tradeoffs",
+      "encoding-reader-writer-compatibility",
+      "replication-session-and-failover-guarantees",
+      "replication-conflict-and-quorum-contract",
+      "partitioning-keys-indexes-and-rebalance",
+      "transactions-isolation-contract",
+      "transactions-lost-updates-and-cas",
+      "transactions-write-skew-and-phantoms",
+      "transactions-serializable-costs",
+      "distributed-leases-and-fencing",
+      "consistency-ordering-and-coordination",
+      "consensus-versus-atomic-commit",
+      "stream-event-time-and-joins",
+      "stream-checkpoints-and-effects",
+      "end-to-end-idempotency-and-integrity",
+      "operations-audit-and-restore",
+      "data-privacy-purpose-and-retention"
+    ],
+    "state": [
+      "state-single-owner",
+      "effects-external-sync",
+      "components-cohesive-ownership",
+      "react-render-purity-and-identity",
+      "navigation-state-contracts",
+      "ui-branching-explicitness",
+      "state-location-and-provider-contracts",
+      "lifecycle-readiness-and-user-feedback",
+      "react-external-store-snapshots"
+    ],
+    "storage": [
+      "storage-versioned-boundary",
+      "data-model-access-patterns",
+      "storage-index-workload-tradeoffs",
+      "data-transactional-versus-analytical",
+      "encoding-reader-writer-compatibility",
+      "data-privacy-purpose-and-retention",
+      "lifecycle-readiness-and-user-feedback"
+    ],
+    "subscriptions": [
+      "react-external-store-snapshots"
+    ],
+    "testing": [
+      "tests-risk-observable-behavior",
+      "dependency-reproducibility",
+      "operations-recovery-and-change",
+      "batch-replay-and-publication",
+      "operations-audit-and-restore"
+    ],
+    "types": [
+      "types-boundary-validation",
+      "storage-versioned-boundary",
+      "functional-composition-pipelines",
+      "navigation-state-contracts",
+      "ui-branching-explicitness",
+      "encoding-reader-writer-compatibility"
+    ],
+    "variants": [
+      "patterns-costed-selection"
+    ]
+  }
+}

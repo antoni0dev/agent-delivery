@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "decision": "approved",
+  "knowledgeDigest": "0069da0741753b6b21986ba5c25d312e0e0da1c71acc9250078f315e2dc97813",
+  "sourceSnapshotDigest": "b99216e62d08a21d150dbd403d3fada1362007fadf7e71e894c44f8479cccaa0",
+  "registryDigest": "5822d10aea4363dab3c1d5b44cd7fe0d7d27d929432bcf1d8c5aa8ccb26ddc38",
+  "basis": "owner-attestation",
+  "evidenceDigest": "1cbba2cce63d74abf9b2cdcce30b18bb3dddefdca786cad61cc76e3994aca95f",
+  "digest": "7ed7248ecc184017d44df2d579738371383979583f2341a08d2b473102d9456b"
+}

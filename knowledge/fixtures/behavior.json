@@ -1,0 +1,1140 @@
+{
+  "schemaVersion": 2,
+  "cases": [
+    {
+      "id": "plan-derived-display-state",
+      "phase": "planning",
+      "topics": [
+        "state"
+      ],
+      "situation": "A display total is fully determined by current query data and a selected filter.",
+      "expected": {
+        "expectedDecisionCode": "derive-during-render",
+        "requiredCardIds": [
+          "state-single-owner"
+        ],
+        "forbiddenCardIds": [
+          "storage-versioned-boundary"
+        ],
+        "requiredRejectedPatterns": [
+          "mirrored-derived-state"
+        ]
+      },
+      "positiveOutput": {
+        "decisionCode": "derive-during-render",
+        "appliedCardIds": [
+          "state-single-owner"
+        ],
+        "rejectedPatternCodes": [
+          "mirrored-derived-state"
+        ],
+        "rationale": "The total has no independent lifecycle or writer, so it should be computed from the current query result and filter."
+      },
+      "negativeOutput": {
+        "decisionCode": "mirror-in-effect",
+        "appliedCardIds": [
+          "effects-external-sync"
+        ],
+        "rejectedPatternCodes": [],
+        "rationale": "Copy the total into state whenever the inputs change so the component can render it later."
+      }
+    },
+    {
+      "id": "implement-user-triggered-request",
+      "phase": "implementation",
+      "topics": [
+        "effects",
+        "mutations"
+      ],
+      "situation": "A save request starts when the user activates a submit control.",
+      "expected": {
+        "expectedDecisionCode": "submit-in-handler",
+        "requiredCardIds": [
+          "effects-external-sync",
+          "mutations-confirmed-reconciliation"
+        ],
+        "forbiddenCardIds": [],
+        "requiredRejectedPatterns": [
+          "flag-triggered-effect"
+        ]
+      },
+      "positiveOutput": {
+        "decisionCode": "submit-in-handler",
+        "appliedCardIds": [
+          "effects-external-sync",
+          "mutations-confirmed-reconciliation"
+        ],
+        "rejectedPatternCodes": [
+          "flag-triggered-effect"
+        ],
+        "rationale": "The interaction is the cause, so the handler should submit directly and reconcile cached data from confirmation."
+      },
+      "negativeOutput": {
+        "decisionCode": "flag-triggered-effect",
+        "appliedCardIds": [
+          "effects-external-sync"
+        ],
+        "rejectedPatternCodes": [],
+        "rationale": "Set a submitted flag and let an effect observe the flag before it performs the remote request."
+      }
+    },
+    {
+      "id": "review-cache-account-scope",
+      "phase": "review",
+      "topics": [
+        "cache",
+        "query"
+      ],
+      "situation": "The same resource identifier can return different data for different signed-in accounts.",
+      "expected": {
+        "expectedDecisionCode": "scope-cache-by-account",
+        "requiredCardIds": [
+          "cache-identity-and-invalidation"
+        ],
+        "forbiddenCardIds": [],
+        "requiredRejectedPatterns": [
+          "resource-only-key"
+        ]
+      },
+      "positiveOutput": {
+        "decisionCode": "scope-cache-by-account",
+        "appliedCardIds": [
+          "cache-identity-and-invalidation"
+        ],
+        "rejectedPatternCodes": [
+          "resource-only-key"
+        ],
+        "rationale": "Account identity changes the returned value, so it belongs in cache identity and account changes must separate entries."
+      },
+      "negativeOutput": {
+        "decisionCode": "resource-only-key",
+        "appliedCardIds": [
+          "cache-identity-and-invalidation"
+        ],
+        "rejectedPatternCodes": [],
+        "rationale": "The resource identifier is locally unique enough, so the same entry can be reused after account changes."
+      }
+    },
+    {
+      "id": "plan-low-frequency-status",
+      "phase": "planning",
+      "topics": [
+        "realtime"
+      ],
+      "situation": "A status changes a few times per day and a one-minute delay is acceptable.",
+      "expected": {
+        "expectedDecisionCode": "prefer-periodic-refetch",
+        "requiredCardIds": [
+          "realtime-snapshot-delta-contract"
+        ],
+        "forbiddenCardIds": [],
+        "requiredRejectedPatterns": [
+          "socket-by-availability"
+        ]
+      },
+      "positiveOutput": {
+        "decisionCode": "prefer-periodic-refetch",
+        "appliedCardIds": [
+          "realtime-snapshot-delta-contract"
+        ],
+        "rejectedPatternCodes": [
+          "socket-by-availability"
+        ],
+        "rationale": "The accepted latency and low update frequency do not justify a live ordering, reconnect, and gap-recovery contract."
+      },
+      "negativeOutput": {
+        "decisionCode": "socket-by-availability",
+        "appliedCardIds": [
+          "realtime-snapshot-delta-contract"
+        ],
+        "rejectedPatternCodes": [],
+        "rationale": "A live endpoint exists, so a persistent socket should always be preferred over periodic requests."
+      }
+    },
+    {
+      "id": "implement-irrevocable-mutation",
+      "phase": "implementation",
+      "topics": [
+        "mutations"
+      ],
+      "situation": "An operation is irreversible and its final identifier is assigned by the server.",
+      "expected": {
+        "expectedDecisionCode": "wait-for-confirmation",
+        "requiredCardIds": [
+          "mutations-confirmed-reconciliation"
+        ],
+        "forbiddenCardIds": [],
+        "requiredRejectedPatterns": [
+          "invent-final-record"
+        ]
+      },
+      "positiveOutput": {
+        "decisionCode": "wait-for-confirmation",
+        "appliedCardIds": [
+          "mutations-confirmed-reconciliation"
+        ],
+        "rejectedPatternCodes": [
+          "invent-final-record"
+        ],
+        "rationale": "The client cannot predict the final identifier or reverse the action, so it should show in-flight state until confirmation."
+      },
+      "negativeOutput": {
+        "decisionCode": "invent-final-record",
+        "appliedCardIds": [
+          "mutations-confirmed-reconciliation"
+        ],
+        "rejectedPatternCodes": [],
+        "rationale": "Create a temporary final record immediately and maintain a client ledger to repair any server difference later."
+      }
+    },
+    {
+      "id": "review-two-library-variants",
+      "phase": "review",
+      "topics": [
+        "variants"
+      ],
+      "situation": "Two small variants share little behavior and are unlikely to grow.",
+      "expected": {
+        "expectedDecisionCode": "keep-direct-variants",
+        "requiredCardIds": [
+          "patterns-costed-selection"
+        ],
+        "forbiddenCardIds": [
+          "modules-public-contracts"
+        ],
+        "requiredRejectedPatterns": [
+          "speculative-resolver"
+        ]
+      },
+      "positiveOutput": {
+        "decisionCode": "keep-direct-variants",
+        "appliedCardIds": [
+          "patterns-costed-selection"
+        ],
+        "rejectedPatternCodes": [
+          "speculative-resolver"
+        ],
+        "rationale": "There is no stable shared operation set or expected growth, so a resolver would add maintenance cost without pressure."
+      },
+      "negativeOutput": {
+        "decisionCode": "speculative-resolver",
+        "appliedCardIds": [
+          "modules-public-contracts"
+        ],
+        "rejectedPatternCodes": [],
+        "rationale": "Every library should be wrapped behind a resolver immediately so any future variant will already fit the hierarchy."
+      }
+    },
+    {
+      "id": "implement-persisted-preference",
+      "phase": "implementation",
+      "topics": [
+        "storage",
+        "types"
+      ],
+      "situation": "A preference survives reloads and older persisted shapes may still exist.",
+      "expected": {
+        "expectedDecisionCode": "validate-and-version",
+        "requiredCardIds": [
+          "storage-versioned-boundary",
+          "types-boundary-validation"
+        ],
+        "forbiddenCardIds": [],
+        "requiredRejectedPatterns": [
+          "cast-parsed-json"
+        ]
+      },
+      "positiveOutput": {
+        "decisionCode": "validate-and-version",
+        "appliedCardIds": [
+          "storage-versioned-boundary",
+          "types-boundary-validation"
+        ],
+        "rejectedPatternCodes": [
+          "cast-parsed-json"
+        ],
+        "rationale": "Persistence crosses versions and trust boundaries, so reads need validation plus missing, corrupt, and migration behavior."
+      },
+      "negativeOutput": {
+        "decisionCode": "cast-parsed-json",
+        "appliedCardIds": [
+          "storage-versioned-boundary"
+        ],
+        "rejectedPatternCodes": [],
+        "rationale": "Cast the parsed object to the newest preference type and use fallback values at each component access site."
+      }
+    },
+    {
+      "id": "review-static-list-false-positive",
+      "phase": "review",
+      "topics": [
+        "components"
+      ],
+      "situation": "A static local list renders synchronously with no remote request.",
+      "expected": {
+        "expectedDecisionCode": "keep-local-render",
+        "requiredCardIds": [],
+        "forbiddenCardIds": [
+          "queries-explicit-async-states"
+        ],
+        "requiredRejectedPatterns": [
+          "invent-remote-query"
+        ]
+      },
+      "positiveOutput": {
+        "decisionCode": "keep-local-render",
+        "appliedCardIds": [],
+        "rejectedPatternCodes": [
+          "invent-remote-query"
+        ],
+        "rationale": "The list has no asynchronous boundary, so remote query state guidance is present in context but does not apply to this decision."
+      },
+      "negativeOutput": {
+        "decisionCode": "invent-remote-query",
+        "appliedCardIds": [
+          "queries-explicit-async-states"
+        ],
+        "rejectedPatternCodes": [],
+        "rationale": "The component topic includes query guidance, so the local list should be moved into a server-style cache and loading state."
+      }
+    },
+    {
+      "id": "plan-lazy-settings-panel",
+      "phase": "planning",
+      "topics": [
+        "performance",
+        "components"
+      ],
+      "situation": "A large settings editor is opened by few sessions and bundle analysis shows it dominates initial parse time.",
+      "expected": {
+        "expectedDecisionCode": "split-at-settings-boundary",
+        "requiredCardIds": [
+          "lazy-loading-boundaries",
+          "component-error-boundaries"
+        ],
+        "forbiddenCardIds": [],
+        "requiredRejectedPatterns": [
+          "split-every-component"
+        ]
+      },
+      "positiveOutput": {
+        "decisionCode": "split-at-settings-boundary",
+        "appliedCardIds": [
+          "lazy-loading-boundaries",
+          "component-error-boundaries"
+        ],
+        "rejectedPatternCodes": [
+          "split-every-component"
+        ],
+        "rationale": "Measured cost and low reach justify one feature boundary with a stable fallback, load failure recovery, and optional preloading."
+      },
+      "negativeOutput": {
+        "decisionCode": "split-every-component",
+        "appliedCardIds": [
+          "lazy-loading-boundaries"
+        ],
+        "rejectedPatternCodes": [],
+        "rationale": "Any component can be lazy, so split every field and button to minimize each individual JavaScript module size."
+      }
+    },
+    {
+      "id": "review-lost-update-counter",
+      "phase": "review",
+      "topics": [
+        "mutations",
+        "distributed"
+      ],
+      "situation": "Two workers read the same counter, increment locally, and write an absolute value.",
+      "expected": {
+        "expectedDecisionCode": "use-atomic-relative-update",
+        "requiredCardIds": [
+          "transactions-lost-updates-and-cas"
+        ],
+        "forbiddenCardIds": [
+          "transactions-write-skew-and-phantoms"
+        ],
+        "requiredRejectedPatterns": [
+          "unconditional-read-modify-write"
+        ]
+      },
+      "positiveOutput": {
+        "decisionCode": "use-atomic-relative-update",
+        "appliedCardIds": [
+          "transactions-lost-updates-and-cas"
+        ],
+        "rejectedPatternCodes": [
+          "unconditional-read-modify-write"
+        ],
+        "rationale": "The value depends on the prior value, so the update must be atomic at storage or use a checked version and retry from fresh state."
+      },
+      "negativeOutput": {
+        "decisionCode": "unconditional-read-modify-write",
+        "appliedCardIds": [
+          "distributed-invariants-and-failure"
+        ],
+        "rejectedPatternCodes": [],
+        "rationale": "Both workers can read, increment, and write because the database will serialize each individual write operation."
+      }
+    },
+    {
+      "id": "plan-cross-row-capacity",
+      "phase": "planning",
+      "topics": [
+        "distributed",
+        "data"
+      ],
+      "situation": "Two transactions can reserve different rows after each observes that aggregate reserved capacity is below a limit.",
+      "expected": {
+        "expectedDecisionCode": "protect-capacity-predicate",
+        "requiredCardIds": [
+          "transactions-write-skew-and-phantoms"
+        ],
+        "forbiddenCardIds": [
+          "transactions-lost-updates-and-cas"
+        ],
+        "requiredRejectedPatterns": [
+          "single-row-cas"
+        ]
+      },
+      "positiveOutput": {
+        "decisionCode": "protect-capacity-predicate",
+        "appliedCardIds": [
+          "transactions-write-skew-and-phantoms",
+          "transactions-isolation-contract"
+        ],
+        "rejectedPatternCodes": [
+          "single-row-cas"
+        ],
+        "rationale": "The invariant spans a predicate over several rows, so serializable execution or a correctly locked common guard must protect the aggregate."
+      },
+      "negativeOutput": {
+        "decisionCode": "single-row-cas",
+        "appliedCardIds": [
+          "transactions-lost-updates-and-cas"
+        ],
+        "rejectedPatternCodes": [],
+        "rationale": "Add a compare-and-set condition to each inserted reservation row and the aggregate capacity invariant will be protected."
+      }
+    },
+    {
+      "id": "review-expired-lease-writer",
+      "phase": "review",
+      "topics": [
+        "distributed",
+        "mutations"
+      ],
+      "situation": "A worker pauses past lease expiry, resumes, and can still write after a successor has acquired the lease.",
+      "expected": {
+        "expectedDecisionCode": "enforce-fencing-at-store",
+        "requiredCardIds": [
+          "distributed-leases-and-fencing"
+        ],
+        "forbiddenCardIds": [],
+        "requiredRejectedPatterns": [
+          "trust-local-lease-check"
+        ]
+      },
+      "positiveOutput": {
+        "decisionCode": "enforce-fencing-at-store",
+        "appliedCardIds": [
+          "distributed-leases-and-fencing"
+        ],
+        "rejectedPatternCodes": [
+          "trust-local-lease-check"
+        ],
+        "rationale": "The protected store must reject the old generation token because the paused worker cannot know that its prior lease still grants authority."
+      },
+      "negativeOutput": {
+        "decisionCode": "trust-local-lease-check",
+        "appliedCardIds": [
+          "distributed-invariants-and-failure"
+        ],
+        "rejectedPatternCodes": [],
+        "rationale": "The worker checked the lease before it started, so it can safely complete the write after it resumes from the pause."
+      }
+    },
+    {
+      "id": "review-intentional-dirty-draft",
+      "phase": "review",
+      "topics": [
+        "state"
+      ],
+      "situation": "An editor starts from a saved record. Product explicitly requires preserving unsaved input when a background refresh updates that record. A reviewer proposes removing all local draft state.",
+      "expected": {
+        "expectedDecisionCode": "preserve-independent-draft",
+        "requiredCardIds": [
+          "state-single-owner"
+        ],
+        "forbiddenCardIds": [],
+        "requiredRejectedPatterns": [
+          "erase-intentional-draft"
+        ]
+      },
+      "positiveOutput": {
+        "decisionCode": "preserve-independent-draft",
+        "appliedCardIds": [
+          "state-single-owner"
+        ],
+        "rejectedPatternCodes": [
+          "erase-intentional-draft"
+        ],
+        "rationale": "The draft has independent user intent and a separate lifetime; retain it with explicit reset and conflict behavior instead of overwriting it on refresh."
+      },
+      "negativeOutput": {
+        "decisionCode": "derive-every-field-from-server",
+        "appliedCardIds": [
+          "state-single-owner"
+        ],
+        "rejectedPatternCodes": [],
+        "rationale": "All state derived initially from a server response should always be replaced by the newest server fields, including dirty input."
+      }
+    },
+    {
+      "id": "plan-shared-server-record",
+      "phase": "planning",
+      "topics": [
+        "state",
+        "providers",
+        "query"
+      ],
+      "situation": "Several panels read the same remote record through an existing query client. They share one local selection, but there is no offline editing or independent copy of the record.",
+      "expected": {
+        "expectedDecisionCode": "cache-record-share-local-selection",
+        "requiredCardIds": [
+          "state-location-and-provider-contracts"
+        ],
+        "forbiddenCardIds": [],
+        "requiredRejectedPatterns": [
+          "mirror-server-cache"
+        ]
+      },
+      "positiveOutput": {
+        "decisionCode": "cache-record-share-local-selection",
+        "appliedCardIds": [
+          "state-location-and-provider-contracts"
+        ],
+        "rejectedPatternCodes": [
+          "mirror-server-cache"
+        ],
+        "rationale": "The existing query client owns remote state; only the shared local selection needs another mutable owner at the narrow common boundary."
+      },
+      "negativeOutput": {
+        "decisionCode": "mirror-record-in-global-store",
+        "appliedCardIds": [
+          "state-location-and-provider-contracts"
+        ],
+        "rejectedPatternCodes": [],
+        "rationale": "A global store should copy the complete record because more than one panel reads it, even though the query client already supplies shared data."
+      }
+    },
+    {
+      "id": "review-provider-dependency-order",
+      "phase": "review",
+      "topics": [
+        "providers",
+        "state"
+      ],
+      "situation": "A settings provider reads session identity from a required session provider that is currently mounted inside its children. The settings hook returns an empty identity outside the session provider.",
+      "expected": {
+        "expectedDecisionCode": "fix-provider-dependency-and-required-context",
+        "requiredCardIds": [
+          "state-location-and-provider-contracts"
+        ],
+        "forbiddenCardIds": [],
+        "requiredRejectedPatterns": [
+          "silent-missing-provider"
+        ]
+      },
+      "positiveOutput": {
+        "decisionCode": "fix-provider-dependency-and-required-context",
+        "appliedCardIds": [
+          "state-location-and-provider-contracts"
+        ],
+        "rejectedPatternCodes": [
+          "silent-missing-provider"
+        ],
+        "rationale": "Mount the dependency above its consumer and make missing required context explicit; an empty identity silently conceals a broken ownership contract."
+      },
+      "negativeOutput": {
+        "decisionCode": "keep-empty-default-context",
+        "appliedCardIds": [
+          "state-location-and-provider-contracts"
+        ],
+        "rejectedPatternCodes": [],
+        "rationale": "Keep the empty default identity because it avoids rendering errors, and allow the session provider to remain below the provider that reads it."
+      }
+    },
+    {
+      "id": "implement-corrupt-preference-initialization",
+      "phase": "implementation",
+      "topics": [
+        "storage",
+        "lifecycle"
+      ],
+      "situation": "An optional display preference has an approved default. Corrupt persisted JSON makes initialization return early while its loading flag remains set.",
+      "expected": {
+        "expectedDecisionCode": "settle-with-approved-default",
+        "requiredCardIds": [
+          "lifecycle-readiness-and-user-feedback",
+          "storage-versioned-boundary"
+        ],
+        "forbiddenCardIds": [],
+        "requiredRejectedPatterns": [
+          "unresolved-initialization"
+        ]
+      },
+      "positiveOutput": {
+        "decisionCode": "settle-with-approved-default",
+        "appliedCardIds": [
+          "lifecycle-readiness-and-user-feedback",
+          "storage-versioned-boundary"
+        ],
+        "rejectedPatternCodes": [
+          "unresolved-initialization"
+        ],
+        "rationale": "This optional preference may use its approved default, but initialization must settle explicitly rather than leaving an unfinished loading state after a known failure."
+      },
+      "negativeOutput": {
+        "decisionCode": "leave-initialization-pending",
+        "appliedCardIds": [
+          "lifecycle-readiness-and-user-feedback",
+          "storage-versioned-boundary"
+        ],
+        "rejectedPatternCodes": [],
+        "rationale": "A corrupt preference should leave the entire initialization pending indefinitely so no default is chosen even though Product already approved one."
+      }
+    },
+    {
+      "id": "review-required-authorization-timeout",
+      "phase": "review",
+      "topics": [
+        "lifecycle",
+        "authorization"
+      ],
+      "situation": "A control requires a verified permission result. The permission request timed out. A proposed fix marks ready and permits the action so the spinner can disappear.",
+      "expected": {
+        "expectedDecisionCode": "show-blocked-state-without-authorizing",
+        "requiredCardIds": [
+          "lifecycle-readiness-and-user-feedback"
+        ],
+        "forbiddenCardIds": [],
+        "requiredRejectedPatterns": [
+          "timeout-grants-permission"
+        ]
+      },
+      "positiveOutput": {
+        "decisionCode": "show-blocked-state-without-authorizing",
+        "appliedCardIds": [
+          "lifecycle-readiness-and-user-feedback"
+        ],
+        "rejectedPatternCodes": [
+          "timeout-grants-permission"
+        ],
+        "rationale": "Completing the loading attempt does not establish permission; expose a blocked or error outcome with approved recovery while the required authorization remains absent."
+      },
+      "negativeOutput": {
+        "decisionCode": "authorize-after-timeout",
+        "appliedCardIds": [
+          "lifecycle-readiness-and-user-feedback"
+        ],
+        "rejectedPatternCodes": [],
+        "rationale": "A timeout should permit the action automatically because every initialization gate must eventually resolve and the user has waited long enough."
+      }
+    },
+    {
+      "id": "implement-concurrent-single-use-approval",
+      "phase": "implementation",
+      "topics": [
+        "authorization",
+        "distributed"
+      ],
+      "situation": "Two windows can read the same queued user approval before either deletes it. The approved action may cause an irreversible external effect and survives process restarts.",
+      "expected": {
+        "expectedDecisionCode": "claim-and-deduplicate-at-authority",
+        "requiredCardIds": [
+          "authorization-single-use-intents",
+          "end-to-end-idempotency-and-integrity"
+        ],
+        "forbiddenCardIds": [],
+        "requiredRejectedPatterns": [
+          "separate-read-delete-replay-guard"
+        ]
+      },
+      "positiveOutput": {
+        "decisionCode": "claim-and-deduplicate-at-authority",
+        "appliedCardIds": [
+          "authorization-single-use-intents",
+          "end-to-end-idempotency-and-integrity"
+        ],
+        "rejectedPatternCodes": [
+          "separate-read-delete-replay-guard"
+        ],
+        "rationale": "Separate read and deletion leave a concurrent replay window; use scoped atomic claim or effect-boundary deduplication and preserve durable operation identity through interrupted outcomes."
+      },
+      "negativeOutput": {
+        "decisionCode": "read-delete-then-execute",
+        "appliedCardIds": [
+          "authorization-single-use-intents",
+          "end-to-end-idempotency-and-integrity"
+        ],
+        "rejectedPatternCodes": [],
+        "rationale": "Read the approved record, delete it in a separate operation, and execute; each caller having performed deletion is enough to establish single use."
+      }
+    },
+    {
+      "id": "review-stale-response-correlation",
+      "phase": "review",
+      "topics": [
+        "authorization",
+        "boundaries"
+      ],
+      "situation": "A message response has a valid shape but belongs to another pending request and an earlier account session. The proposed handler resolves the oldest pending promise.",
+      "expected": {
+        "expectedDecisionCode": "validate-sender-scope-and-correlation",
+        "requiredCardIds": [
+          "authorization-single-use-intents"
+        ],
+        "forbiddenCardIds": [],
+        "requiredRejectedPatterns": [
+          "shape-only-response-acceptance"
+        ]
+      },
+      "positiveOutput": {
+        "decisionCode": "validate-sender-scope-and-correlation",
+        "appliedCardIds": [
+          "authorization-single-use-intents"
+        ],
+        "rejectedPatternCodes": [
+          "shape-only-response-acceptance"
+        ],
+        "rationale": "Shape validation cannot authorize the response; bind the validated sender/session and correlation identity to the intended outstanding operation before resolving it."
+      },
+      "negativeOutput": {
+        "decisionCode": "resolve-oldest-pending-request",
+        "appliedCardIds": [
+          "authorization-single-use-intents"
+        ],
+        "rejectedPatternCodes": [],
+        "rationale": "Since the payload parses successfully, resolving whichever request has waited longest is sufficient even when the response identifies another account session."
+      }
+    },
+    {
+      "id": "plan-live-sdk-existing-guarantees",
+      "phase": "planning",
+      "topics": [
+        "realtime",
+        "cache"
+      ],
+      "situation": "The established SDK already owns an account-scoped, ordered, idempotent snapshot stream and reconnect recovery. The feature only needs to subscribe and render that store.",
+      "expected": {
+        "expectedDecisionCode": "reuse-sdk-owner-and-lifecycle",
+        "requiredCardIds": [
+          "realtime-snapshot-delta-contract",
+          "realtime-subscription-lifecycle"
+        ],
+        "forbiddenCardIds": [],
+        "requiredRejectedPatterns": [
+          "duplicate-sdk-reconciliation"
+        ]
+      },
+      "positiveOutput": {
+        "decisionCode": "reuse-sdk-owner-and-lifecycle",
+        "appliedCardIds": [
+          "realtime-snapshot-delta-contract",
+          "realtime-subscription-lifecycle"
+        ],
+        "rejectedPatternCodes": [
+          "duplicate-sdk-reconciliation"
+        ],
+        "rationale": "Reuse the SDK authority and subscription lifecycle; a parallel reconciliation ledger would introduce competing ownership without a demonstrated missing guarantee."
+      },
+      "negativeOutput": {
+        "decisionCode": "add-second-reconciliation-ledger",
+        "appliedCardIds": [
+          "realtime-snapshot-delta-contract",
+          "realtime-subscription-lifecycle"
+        ],
+        "rejectedPatternCodes": [],
+        "rationale": "Add an independent client ledger and reorder every event again because any live UI always needs to rebuild the guarantees already supplied by its SDK."
+      }
+    },
+    {
+      "id": "implement-first-valid-live-entity",
+      "phase": "implementation",
+      "topics": [
+        "realtime"
+      ],
+      "situation": "The authenticated stream contract includes create and update events. A proposed guard rejects every event whose entity is not already in the local map, including valid creates.",
+      "expected": {
+        "expectedDecisionCode": "validate-event-and-allow-valid-create",
+        "requiredCardIds": [
+          "realtime-snapshot-delta-contract"
+        ],
+        "forbiddenCardIds": [],
+        "requiredRejectedPatterns": [
+          "broad-unknown-entity-guard"
+        ]
+      },
+      "positiveOutput": {
+        "decisionCode": "validate-event-and-allow-valid-create",
+        "appliedCardIds": [
+          "realtime-snapshot-delta-contract"
+        ],
+        "rejectedPatternCodes": [
+          "broad-unknown-entity-guard"
+        ],
+        "rationale": "Validate against the stream contract and preserve its create path; rejecting all locally unknown identities prevents the first valid record from ever appearing."
+      },
+      "negativeOutput": {
+        "decisionCode": "reject-all-unknown-entities",
+        "appliedCardIds": [
+          "realtime-snapshot-delta-contract"
+        ],
+        "rejectedPatternCodes": [],
+        "rationale": "Reject every unknown local entity regardless of validated event type, since a guard that blocks more events is always safer."
+      }
+    },
+    {
+      "id": "review-one-of-two-stream-consumers-leaves",
+      "phase": "review",
+      "topics": [
+        "realtime",
+        "lifecycle"
+      ],
+      "situation": "Two components share one underlying stream for the same scope. One unmounts while the other still needs updates; later the last component unmounts.",
+      "expected": {
+        "expectedDecisionCode": "release-one-reference-then-close-last",
+        "requiredCardIds": [
+          "realtime-subscription-lifecycle"
+        ],
+        "forbiddenCardIds": [],
+        "requiredRejectedPatterns": [
+          "unscoped-stream-teardown"
+        ]
+      },
+      "positiveOutput": {
+        "decisionCode": "release-one-reference-then-close-last",
+        "appliedCardIds": [
+          "realtime-subscription-lifecycle"
+        ],
+        "rejectedPatternCodes": [
+          "unscoped-stream-teardown"
+        ],
+        "rationale": "Release each consumer ownership independently and close the underlying stream when its final subscriber leaves, using the established shared owner."
+      },
+      "negativeOutput": {
+        "decisionCode": "close-on-every-unmount",
+        "appliedCardIds": [
+          "realtime-subscription-lifecycle"
+        ],
+        "rejectedPatternCodes": [],
+        "rationale": "Close the shared stream whenever any subscriber unmounts, even if another active consumer still depends on it."
+      }
+    },
+    {
+      "id": "review-unchanged-external-snapshot",
+      "phase": "review",
+      "topics": [
+        "subscriptions",
+        "effects"
+      ],
+      "situation": "An external-store adapter returns a newly allocated wrapper from getSnapshot on every read, even when its underlying value has not changed. Server rendering is enabled.",
+      "expected": {
+        "expectedDecisionCode": "cache-immutable-snapshot-and-align-hydration",
+        "requiredCardIds": [
+          "react-external-store-snapshots"
+        ],
+        "forbiddenCardIds": [],
+        "requiredRejectedPatterns": [
+          "unstable-unchanged-snapshot"
+        ]
+      },
+      "positiveOutput": {
+        "decisionCode": "cache-immutable-snapshot-and-align-hydration",
+        "appliedCardIds": [
+          "react-external-store-snapshots"
+        ],
+        "rejectedPatternCodes": [
+          "unstable-unchanged-snapshot"
+        ],
+        "rationale": "Keep snapshot identity stable until the store changes and provide the required server/hydration initial contract; unchanged allocation defeats the supported snapshot comparison."
+      },
+      "negativeOutput": {
+        "decisionCode": "allocate-snapshot-on-every-read",
+        "appliedCardIds": [
+          "react-external-store-snapshots"
+        ],
+        "rejectedPatternCodes": [],
+        "rationale": "Allocate a new object on every read so the runtime is forced to rerender, with no need to align the initial server snapshot."
+      }
+    },
+    {
+      "id": "implement-variant-hooks",
+      "phase": "implementation",
+      "topics": [
+        "variants",
+        "components",
+        "effects"
+      ],
+      "situation": "A runtime-selected variant may change while the component stays mounted. Both variant query hooks return the same shape. A proposal calls one ordinary hook or the other inside a conditional.",
+      "expected": {
+        "expectedDecisionCode": "preserve-stable-hook-topology",
+        "requiredCardIds": [
+          "custom-hooks-intent-boundaries"
+        ],
+        "forbiddenCardIds": [],
+        "requiredRejectedPatterns": [
+          "conditional-ordinary-hook-dispatch"
+        ]
+      },
+      "positiveOutput": {
+        "decisionCode": "preserve-stable-hook-topology",
+        "appliedCardIds": [
+          "custom-hooks-intent-boundaries"
+        ],
+        "rejectedPatternCodes": [
+          "conditional-ordinary-hook-dispatch"
+        ],
+        "rationale": "A shared result shape does not preserve hook call order; use established top-level enablement or separate variant components with stable internal hook topology."
+      },
+      "negativeOutput": {
+        "decisionCode": "conditionally-call-variant-hooks",
+        "appliedCardIds": [
+          "custom-hooks-intent-boundaries"
+        ],
+        "rejectedPatternCodes": [],
+        "rationale": "Conditional ordinary hooks are safe whenever they return the same TypeScript shape, even when the selected variant changes during the component lifetime."
+      }
+    },
+    {
+      "id": "plan-memoization-in-uncompiled-surface",
+      "phase": "planning",
+      "topics": [
+        "performance"
+      ],
+      "situation": "A repository has a measured slow pure computation and React Compiler is not enabled for that surface. Existing profiling shows a carefully scoped memoization change improves the interaction.",
+      "expected": {
+        "expectedDecisionCode": "respect-measured-local-optimization",
+        "requiredCardIds": [
+          "react-performance-evidence"
+        ],
+        "forbiddenCardIds": [],
+        "requiredRejectedPatterns": [
+          "universal-compiler-assumption"
+        ]
+      },
+      "positiveOutput": {
+        "decisionCode": "respect-measured-local-optimization",
+        "appliedCardIds": [
+          "react-performance-evidence"
+        ],
+        "rejectedPatternCodes": [
+          "universal-compiler-assumption"
+        ],
+        "rationale": "Use the actual compilation and measurement evidence; a scoped optimization can be justified here while correctness and complete invalidation inputs still need verification."
+      },
+      "negativeOutput": {
+        "decisionCode": "ban-all-manual-memoization",
+        "appliedCardIds": [
+          "react-performance-evidence"
+        ],
+        "rejectedPatternCodes": [],
+        "rationale": "Reject all manual memoization because React applications automatically receive compiler optimization even when it is not configured for this surface."
+      }
+    },
+    {
+      "id": "review-authoritative-convention",
+      "phase": "review",
+      "topics": [
+        "query",
+        "components",
+        "variants"
+      ],
+      "situation": "The repository explicitly standardizes a validated Result-based query layer and separate loading/error branches. Its code correctly renders all accepted states. A generic reviewer demands a new MatchQuery abstraction.",
+      "expected": {
+        "expectedDecisionCode": "respect-correct-repository-contract",
+        "requiredCardIds": [
+          "queries-explicit-async-states",
+          "patterns-costed-selection"
+        ],
+        "forbiddenCardIds": [],
+        "requiredRejectedPatterns": [
+          "style-preference-as-defect"
+        ]
+      },
+      "positiveOutput": {
+        "decisionCode": "respect-correct-repository-contract",
+        "appliedCardIds": [
+          "queries-explicit-async-states",
+          "patterns-costed-selection"
+        ],
+        "rejectedPatternCodes": [
+          "style-preference-as-defect"
+        ],
+        "rationale": "The required property is truthful asynchronous state behavior under the approved repository contract, not adoption of an unrelated helper solely for stylistic consistency."
+      },
+      "negativeOutput": {
+        "decisionCode": "replace-with-preferred-helper",
+        "appliedCardIds": [
+          "queries-explicit-async-states",
+          "patterns-costed-selection"
+        ],
+        "rejectedPatternCodes": [],
+        "rationale": "Rewrite the correct query layer to use the generic preferred helper even though the repository has an explicit working convention and no behavioral defect."
+      }
+    },
+    {
+      "id": "plan-projection-freshness-versus-integrity",
+      "phase": "planning",
+      "topics": [
+        "data",
+        "distributed"
+      ],
+      "situation": "Product permits a reporting projection to lag committed operations briefly. It does not permit duplicate charges or missing entitlements. A plan uses acceptable lag to justify temporary duplicate effects and later repair.",
+      "expected": {
+        "expectedDecisionCode": "allow-staleness-preserve-effect-integrity",
+        "requiredCardIds": [
+          "dataflow-source-and-projection-contract",
+          "end-to-end-idempotency-and-integrity"
+        ],
+        "forbiddenCardIds": [],
+        "requiredRejectedPatterns": [
+          "freshness-permission-as-integrity-waiver"
+        ]
+      },
+      "positiveOutput": {
+        "decisionCode": "allow-staleness-preserve-effect-integrity",
+        "appliedCardIds": [
+          "dataflow-source-and-projection-contract",
+          "end-to-end-idempotency-and-integrity"
+        ],
+        "rejectedPatternCodes": [
+          "freshness-permission-as-integrity-waiver"
+        ],
+        "rationale": "A freshness allowance concerns when a correct projection is visible; it does not authorize corrupt or duplicate authoritative effects or an unapproved compensation policy."
+      },
+      "negativeOutput": {
+        "decisionCode": "relax-effect-integrity-with-view-lag",
+        "appliedCardIds": [
+          "dataflow-source-and-projection-contract",
+          "end-to-end-idempotency-and-integrity"
+        ],
+        "rejectedPatternCodes": [],
+        "rationale": "Because reporting is eventually consistent, duplicate authoritative effects are also acceptable and can be repaired later without another product decision."
+      }
+    },
+    {
+      "id": "implement-retry-same-intent-not-new-action",
+      "phase": "implementation",
+      "topics": [
+        "mutations",
+        "distributed"
+      ],
+      "situation": "The server supports atomic deduplication by operation ID. A submission committed but its response was lost. The user separately makes a second intentional submission with identical content.",
+      "expected": {
+        "expectedDecisionCode": "reuse-id-for-retry-new-id-for-new-intent",
+        "requiredCardIds": [
+          "end-to-end-idempotency-and-integrity"
+        ],
+        "forbiddenCardIds": [],
+        "requiredRejectedPatterns": [
+          "content-hash-merges-distinct-intents"
+        ]
+      },
+      "positiveOutput": {
+        "decisionCode": "reuse-id-for-retry-new-id-for-new-intent",
+        "appliedCardIds": [
+          "end-to-end-idempotency-and-integrity"
+        ],
+        "rejectedPatternCodes": [
+          "content-hash-merges-distinct-intents"
+        ],
+        "rationale": "The retry preserves the original operation identity while the distinct user intent receives a new identity; content equality does not establish that two actions are the same intent."
+      },
+      "negativeOutput": {
+        "decisionCode": "deduplicate-by-content",
+        "appliedCardIds": [
+          "end-to-end-idempotency-and-integrity"
+        ],
+        "rejectedPatternCodes": [],
+        "rationale": "Use a content hash for all requests so the second intentional action is suppressed together with retries of the first action."
+      }
+    },
+    {
+      "id": "review-missing-live-terminal-event",
+      "phase": "review",
+      "topics": [
+        "mutations",
+        "realtime"
+      ],
+      "situation": "The existing API exposes authoritative operation status. Two equivalent action variants depend on live completion messages, but only one has a query/status recovery path when the message is lost.",
+      "expected": {
+        "expectedDecisionCode": "share-authoritative-terminal-recovery",
+        "requiredCardIds": [
+          "mutations-confirmed-reconciliation",
+          "realtime-subscription-lifecycle"
+        ],
+        "forbiddenCardIds": [],
+        "requiredRejectedPatterns": [
+          "asymmetric-terminal-recovery"
+        ]
+      },
+      "positiveOutput": {
+        "decisionCode": "share-authoritative-terminal-recovery",
+        "appliedCardIds": [
+          "mutations-confirmed-reconciliation",
+          "realtime-subscription-lifecycle"
+        ],
+        "rejectedPatternCodes": [
+          "asymmetric-terminal-recovery"
+        ],
+        "rationale": "Both variants need the existing authoritative terminal reconciliation contract; a missing message leaves the outcome unknown and does not authorize repeating the effect."
+      },
+      "negativeOutput": {
+        "decisionCode": "keep-one-variant-live-only",
+        "appliedCardIds": [
+          "mutations-confirmed-reconciliation",
+          "realtime-subscription-lifecycle"
+        ],
+        "rejectedPatternCodes": [],
+        "rationale": "Leave the second variant dependent only on a live message because recovery in one equivalent branch is enough to demonstrate reliability for the whole feature."
+      }
+    },
+    {
+      "id": "review-command-versus-accepted-event",
+      "phase": "review",
+      "topics": [
+        "data"
+      ],
+      "situation": "A request can fail domain validation, but its consumer publishes an immutable success event before performing that validation. Downstream projections treat the event as confirmed fact.",
+      "expected": {
+        "expectedDecisionCode": "validate-before-accepted-fact",
+        "requiredCardIds": [
+          "dataflow-source-and-projection-contract"
+        ],
+        "forbiddenCardIds": [],
+        "requiredRejectedPatterns": [
+          "command-treated-as-confirmed-fact"
+        ]
+      },
+      "positiveOutput": {
+        "decisionCode": "validate-before-accepted-fact",
+        "appliedCardIds": [
+          "dataflow-source-and-projection-contract"
+        ],
+        "rejectedPatternCodes": [
+          "command-treated-as-confirmed-fact"
+        ],
+        "rationale": "A request is not yet an accepted fact; validate before publishing success or explicitly model a tentative request and its confirmed or rejected outcome."
+      },
+      "negativeOutput": {
+        "decisionCode": "publish-success-before-validation",
+        "appliedCardIds": [
+          "dataflow-source-and-projection-contract"
+        ],
+        "rejectedPatternCodes": [],
+        "rationale": "Publish the success event first because all commands eventually become facts, and let downstream consumers infer rejection if validation later fails."
+      }
+    }
+  ]
+}

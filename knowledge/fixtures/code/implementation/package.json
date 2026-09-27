@@ -1,0 +1,8 @@
+{
+  "name": "preference-boundary-fixture",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test preference-store.test.js"
+  }
+}

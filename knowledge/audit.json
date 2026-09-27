@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "producer": {
+    "kind": "independent",
+    "id": "independent-source-depth-auditor-20260927"
+  },
+  "method": "fresh-coverage-audit",
+  "decision": "approved",
+  "sourceSnapshotDigest": "b99216e62d08a21d150dbd403d3fada1362007fadf7e71e894c44f8479cccaa0",
+  "cardSetDigest": "26a21441ca6ed7f28366253066f423dfcace11ba22a7fb7aecbe96c8f72e0591",
+  "coverageDigest": "84b407a255ed218dd35c39b938bb032ac08fdfc84a1fd379dd29050551eb589a",
+  "topicIndexDigest": "ecab642186880a6c6f27cc6b1c8a4c786e6668eb54d60962d9371600e822e495",
+  "auditDigest": "0f03d624463e98b6574f167a9e37b8764c0586b75a3e1bf1daf9169ec15fec60"
+}

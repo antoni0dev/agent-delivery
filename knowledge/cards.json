@@ -1,0 +1,590 @@
+{
+  "schemaVersion": 1,
+  "cards": [
+    {
+      "id": "state-single-owner",
+      "topics": [
+        "state",
+        "planning",
+        "review"
+      ],
+      "content": "## Keep one mutable owner\n\nChoose one authoritative owner for each mutable value. Compute projections at the point of use instead of copying them into another store or component. Lift state only when independent consumers need to coordinate writes or share a lifecycle. A render observes a fixed state snapshot; a setter queues a future render rather than changing that snapshot. Use the prior-state updater form when queued updates compose from the previous value, and replace object or array state immutably so React can observe the new identity.\n\n**Apply when:** a value can be derived from props, query data, route state, or another field; multiple layers can write the same concept; a provider boundary is being designed.\n\n**Boundary notes:** a draft intentionally diverges from a saved value, an undo buffer preserves history, or a local form needs an editable snapshot. Those are distinct states and should be named as such.\n\n**Checks:** identify the writer, lifetime, reset event, and derivation. Verify that removing a mirror cannot lose user intent. Group related event updates deliberately, never read a setter as synchronous assignment, and do not mutate existing state objects. Do not introduce a global store merely to avoid passing data through one or two generic layers.\n\n**Anti-pattern:** Duplicate an authoritative value in state and synchronize it after render.\n\n**Why it fails:** The copies can disagree for a render, gain competing writers, or overwrite an unsaved edit.\n\n**Bad example (illustrative):** const [total, setTotal] = useState(0); useEffect(() => setTotal(sum(items)), [items]);\n\n**Better example (illustrative):** const total = sum(items); Keep a separately named draft only when the user can edit it independently.\n\n**Legitimate exceptions:** An editable draft, undo history or deliberate snapshot is real additional state. Define its initialization and reset policy; do not replace a dirty draft whenever a server refresh arrives.\n\n**Verification scenario:** Change the source inputs and check the displayed total immediately. For a draft, refresh the saved record and verify the approved dirty-edit behavior.\n\n**Additional decision constraints:** Group fields that transition together and avoid redundant or deeply nested state when a stable identifier and derived lookup suffice. A form draft is distinct from the saved record; define when it resets and how concurrent saved-data refreshes affect unsaved edits."
+    },
+    {
+      "id": "effects-external-sync",
+      "topics": [
+        "effects",
+        "state",
+        "implementation",
+        "review"
+      ],
+      "content": "## Use effects for external synchronization\n\nAn effect synchronizes React state with a system outside render, such as a subscription, timer, browser API, or imperative widget. User actions belong in event handlers, and values determined by current inputs belong in render-time derivation.\n\n**Apply when:** setup and cleanup follow a component lifecycle, or an external resource must track a committed value.\n\n**Boundary notes:** copying props into state, computing filtered data, or triggering a mutation because another state field changed. These obscure causality and add extra render cycles.\n\n**Checks:** name the external system, make setup and cleanup symmetric, list every reactive input, and prove repeated setup is safe. Keep stable identities only when an external API requires them, rather than memoizing by default.\n\n**Anti-pattern:** Use an effect as an indirect event handler or as a chain of derived-state updates.\n\n**Why it fails:** The triggering user intent is lost among rerenders, dependencies and remounts; cleanup can be omitted for actual external resources.\n\n**Bad example (illustrative):** onSubmit: setShouldSave(true); Effect watching shouldSave: save(form).\n\n**Better example (illustrative):** onSubmit: validate and save the submitted values. For an external subscription, an effect connects and returns its matching disconnect.\n\n**Legitimate exceptions:** An effect is appropriate when an external system must follow committed props or state. Prefer an existing framework loader or query abstraction for fetching when the repository already provides one.\n\n**Verification scenario:** Submit once, rerender and remount: the action must not repeat. For a subscription, change its scope and verify the previous connection is released.\n\n**Additional decision constraints:** Treat each effect as one independently removable synchronization process. Its dependency list describes the reactive values the code reads; change the code or ownership to change those dependencies rather than suppressing the dependency check. A raw fetch effect needs cancellation or a relevance check before applying a delayed response. Application initialization should have an explicit root owner: module-import side effects can run even if the intended component never mounts.\n\nSeparate values that must resynchronize the external resource from event behavior that only needs the latest value. Where the runtime supports an Effect Event or equivalent non-reactive event contract, use it within its documented scope; never use it to hide a dependency that should reconnect or resynchronize the resource. A prior-state updater can remove an unnecessary captured-state read without suppressing dependencies."
+    },
+    {
+      "id": "components-cohesive-ownership",
+      "topics": [
+        "components",
+        "state",
+        "planning",
+        "implementation"
+      ],
+      "content": "## Shape components around cohesive responsibility\n\nA domain component should own the data and actions that define its behavior when that ownership remains local and testable. Generic presentation components receive explicit values and callbacks. Split a component when parts change for different reasons, not to satisfy an arbitrary line count.\n\n**Apply when:** a domain component only forwards hook results through several layers, or a reusable visual primitive is mixed with domain decisions.\n\n**Boundary notes:** moving every hook into leaf components can duplicate requests or hide ordering constraints. A coordinating parent remains appropriate when siblings must share one transaction or state machine.\n\n**Checks:** trace data ownership, error handling, and mutation authority. Confirm the split gives each piece a clear contract and does not create pass-through wrappers.\n\n**Anti-pattern:** Split solely by line count, or move every query into leaves regardless of coordinated ownership.\n\n**Why it fails:** Indirection can increase while one user operation becomes distributed across components with inconsistent loading or mutation decisions.\n\n**Bad example (illustrative):** A parent passes every field through WrapperA and WrapperB, neither of which owns behavior.\n\n**Better example (illustrative):** A feature component owns its feature query and actions; a reusable Row receives the display values and callbacks it needs.\n\n**Legitimate exceptions:** A parent coordinating sibling selection, a shared transaction or one state machine is a legitimate owner. A small cohesive component needs no extraction.\n\n**Verification scenario:** Change a presentation primitive without changing feature policy; verify coordinated siblings still share the intended operation and error boundary."
+    },
+    {
+      "id": "components-composition-contracts",
+      "topics": [
+        "components",
+        "composition",
+        "planning"
+      ],
+      "content": "## Use composition when consumers control structure\n\nCompound components, slots, and render functions are useful when callers need to arrange related UI while the implementation keeps shared behavior and accessibility rules. Prefer ordinary props for a small, stable set of variations.\n\n**Apply when:** child parts share context, callers need layout freedom, or state and accessibility must stay coordinated across a family of elements.\n\n**Boundary notes:** a component with two simple variants does not need a miniature framework. Context also should not hide required data that could be a clear prop on a generic primitive.\n\n**Checks:** define valid nesting, missing-provider behavior, keyboard and focus contracts, and which layer owns state. Ensure the API makes invalid combinations difficult to express.\n\n**Anti-pattern:** Add a large collection of configuration flags for independently arranged parts, or introduce compound components for two fixed variations.\n\n**Why it fails:** Flag combinations become invalid or the API adds ceremony without buying any layout or behavior flexibility.\n\n**Bad example (illustrative):** Panel({showHeader, hideTitle, footerMode, alternateFooter, nestedBody, ...many layout flags}).\n\n**Better example (illustrative):** Compose named header/body/footer slots when consumers need arrangement freedom, while a common owner maintains focus and shared state.\n\n**Legitimate exceptions:** Ordinary props are clearer for a small stable API. Compound parts need a documented provider and nesting contract; composition must not hide required domain data.\n\n**Verification scenario:** Try supported rearrangements and invalid nesting. Verify keyboard interaction, focus restoration and one shared state owner.\n\n**Additional decision constraints:** When delegating props, define which layer owns controlled value, disabled state, event handlers and accessibility attributes. Spreading delegated props after an owned handler can silently replace behavior. Do not pass a guessed native prop into a custom primitive: verify its actual public API and behavior."
+    },
+    {
+      "id": "modules-public-contracts",
+      "topics": [
+        "modules",
+        "boundaries",
+        "planning",
+        "review"
+      ],
+      "content": "## Treat module boundaries as ownership contracts\n\nA module exposes a small public surface and keeps storage, transport, and rendering details private. Dependencies should point toward stable domain contracts. Move genuinely shared concepts to a neutral owner instead of reaching into another feature's internals.\n\n**Apply when:** features import private files from each other, circular dependencies appear, or changing one integration forces unrelated consumers to change.\n\n**Boundary notes:** extracting a shared module for a single speculative reuse adds indirection without creating a real contract. Local duplication can be cheaper until the shared concept is proven.\n\n**Checks:** name the owner, public entry point, dependency direction, and replacement boundary. Verify that tests use the public API and that internal file layout can change without consumer edits.\n\n**Anti-pattern:** Import another feature's internal implementation because it is convenient today.\n\n**Why it fails:** Changing that feature's internals breaks unrelated consumers and may create cyclic ownership.\n\n**Bad example (illustrative):** Feature B imports feature-a/internal/cache-implementation rather than a supported contract.\n\n**Better example (illustrative):** Expose the intended domain operation from feature A, or move a proven shared concept into a neutral module with explicit consumers.\n\n**Legitimate exceptions:** Do not create a shared platform for hypothetical reuse. A local implementation can remain local until another real consumer needs the same contract.\n\n**Verification scenario:** Reorganize internal files without changing public consumers. Use the repository's dependency check to detect forbidden imports and cycles."
+    },
+    {
+      "id": "types-boundary-validation",
+      "topics": [
+        "types",
+        "boundaries",
+        "implementation",
+        "review"
+      ],
+      "content": "## Validate unknown data at boundaries\n\nStatic types describe values after validation. Parse network responses, persisted data, messages, and untyped library output before they enter the domain. Model meaningful variants with discriminated unions and derive unions from runtime registries when both must stay aligned.\n\n**Apply when:** data crosses a process, storage, version, plugin, or trust boundary.\n\n**Boundary notes:** repeated defensive fallbacks inside already-typed code hide contract violations. Type assertions transfer risk without proving anything.\n\n**Checks:** reject unknown discriminants with context, distinguish missing from invalid, and keep validation near ingress. Test malformed, future-version, and partially missing inputs. Do not add optional chaining to values whose type says they exist.\n\n**Anti-pattern:** Assert that untrusted JSON is the current domain type, then scatter defaults through consumers.\n\n**Why it fails:** A compile-time claim neither validates runtime shape nor distinguishes corruption from a valid empty result.\n\n**Bad example (illustrative):** const record = JSON.parse(raw) as DomainRecord;\n\n**Better example (illustrative):** Parse unknown input at ingress with the repository's schema, then pass a validated discriminated value through typed code.\n\n**Legitimate exceptions:** A schema does not replace domain authorization or semantic checks. Trusted internal values do not need repeated parsing and defensive defaults at every access.\n\n**Verification scenario:** Send a malformed field, unknown discriminant and future schema version through the actual boundary. Verify useful rejection and no fabricated domain values."
+    },
+    {
+      "id": "queries-explicit-async-states",
+      "topics": [
+        "query",
+        "components",
+        "implementation",
+        "review"
+      ],
+      "content": "## Render asynchronous states explicitly\n\nLoading, error, empty, and success are different user states. Preserve that distinction through the query layer and render each state deliberately. Background refresh may keep usable data visible while reporting a non-blocking refresh state. When a query depends on prerequisites, keep execution disabled until every required value exists, then derive the complete cache key from those values and run only while the gate is enabled.\n\n**Apply when:** a screen depends on remote data or an asynchronous computation, including a request that depends on another result or user selection.\n\n**Boundary notes:** an empty collection is not a safe substitute for loading, failure, or waiting for prerequisites. A retained result during refresh is appropriate only when its scope and identity still match the request.\n\n**Checks:** define prerequisite waiting, initial load, retry, empty success, stale data, and background failure behavior. Verify the execution gate and cache key use the same identity inputs, and that access or account changes cannot display data from the previous scope.\n\n**Anti-pattern:** Convert pending, unavailable or failed data to an apparently successful empty result.\n\n**Why it fails:** The screen tells the user no records exist when it has not established that fact; dependent requests may also run without their identity inputs.\n\n**Bad example (illustrative):** const rows = query.data ?? []; render Empty when rows.length === 0, regardless of query state.\n\n**Better example (illustrative):** Represent prerequisite waiting, first load, error and successful empty data separately. Enable a dependent query only with the same complete identity used in its key.\n\n**Legitimate exceptions:** Retaining previously loaded data during a background refresh can be correct within the same identity scope. A disabled query is not necessarily actively loading.\n\n**Verification scenario:** Exercise missing prerequisites, first response, empty success, failure and account change. Never show a previous account's result as the new account's data.\n\nA bounded or filtered list is not proof that an omitted entity does not exist. For an explicitly selected or watched entity outside that list, use the approved authoritative lookup or complete query scope. Keep an asserting data hook inside a subtree that has already established success; do not bypass loading and failure by asserting in an ungated caller."
+    },
+    {
+      "id": "cache-identity-and-invalidation",
+      "topics": [
+        "cache",
+        "query",
+        "boundaries",
+        "implementation"
+      ],
+      "content": "## Make cache identity complete\n\nA cache key must contain every input that can change the returned value, including identity, tenant or account scope, filters, pagination, locale, and version when relevant. Invalidation follows the ownership of the changed server fact.\n\n**Apply when:** remote data is reused, prefetched, paginated, or updated after a mutation.\n\n**Boundary notes:** adding timestamps to keys defeats reuse, while broad invalidation can create load spikes and hide unclear ownership. Local component state does not need a server cache.\n\n**Checks:** compare the key with the request and authorization context, define freshness and garbage-collection expectations, and list which successful mutations invalidate or update each query. Verify logout and scope changes clear or separate sensitive entries.\n\n**Anti-pattern:** Key a scoped response only by resource ID, or invalidate every cache after every mutation.\n\n**Why it fails:** Different requests collide, sensitive data can cross identities, and broad refetches hide unclear ownership while increasing load.\n\n**Bad example (illustrative):** key = [resourceId] although the request also depends on accountId and filter.\n\n**Better example (illustrative):** key = [resourceType, accountId, resourceId, filter]; update or invalidate the entries whose authoritative server fact actually changed.\n\n**Legitimate exceptions:** An account-independent public resource should not acquire an account key without a real identity difference. Equivalent filter objects need canonical semantics.\n\n**Verification scenario:** Read the same resource under two accounts and two filters; then mutate one record and verify the affected views refresh without unrelated cache churn.\n\n**Additional decision constraints:** For a logical move between related cached collections, preserve the complete domain invariant: removing from one view is not proof the destination view was updated. Shared-key cache behavior belongs to one query/cache owner; verify library option scope before supplying conflicting structural-sharing or reconciliation behavior from different observers."
+    },
+    {
+      "id": "mutations-confirmed-reconciliation",
+      "topics": [
+        "mutations",
+        "cache",
+        "forms",
+        "implementation",
+        "review"
+      ],
+      "content": "## Reconcile mutations from confirmed results\n\nValidate user input before submission, expose the in-flight state, and update cached views from the confirmed server result or targeted invalidation. Use optimistic updates only when the operation is predictably reversible and the temporary state materially improves the interaction.\n\n**Apply when:** a user action changes remote state.\n\n**Boundary notes:** money movement, irreversible actions, conflict-prone edits, and server-assigned values often need confirmation before display. A second client ledger is usually harder to keep correct than the server-backed cache.\n\n**Checks:** define duplicate-click behavior, error recovery, invalidation, and settlement. For optimistic changes, capture rollback data, handle overlapping mutations, and reconcile on completion.\n\n**Anti-pattern:** Invent a final successful record or optimistically apply an irreversible operation before confirmation.\n\n**Why it fails:** The UI claims an outcome the server may reject, and a second client ledger creates another mutable authority.\n\n**Bad example (illustrative):** Show a finalized transfer with a locally generated final identifier immediately after dispatch.\n\n**Better example (illustrative):** Show the existing in-flight state, use the confirmed server identity/result, and update or invalidate affected cached views.\n\n**Legitimate exceptions:** An approved reversible interaction can benefit from an optimistic preview. It needs rollback and overlap handling; an unknown result must not be converted into either success or failure.\n\n**Verification scenario:** Exercise success, rejection and response loss. Verify displayed final values come from authoritative confirmation and retry uses the existing operation contract.\n\n**Additional decision constraints:** Do not automatically retry a non-idempotent logical action unless its stable operation identity reaches an authoritative atomic deduplication boundary. Distinguish replaying a transport message from authorizing another effect. A live event is not a sufficient sole terminal-recovery path when it can be lost: use the existing authoritative result/status or bounded refetch contract. Equivalent operation variants need symmetric settlement, invalidation and recovery. Unknown outcomes remain unknown until reconciled; compensation or user-visible retry behavior requires approved product policy."
+    },
+    {
+      "id": "realtime-snapshot-delta-contract",
+      "topics": [
+        "realtime",
+        "cache",
+        "distributed",
+        "planning",
+        "implementation"
+      ],
+      "content": "## Define the snapshot and delta contract\n\nA live view needs an authoritative snapshot, a clear delta identity, and ordering or version semantics. Apply events idempotently, scope them to the active session, and recover from gaps with a fresh snapshot rather than guessing missing state.\n\n**Apply when:** WebSocket, server-sent event, change-data, or polling channels update shared data.\n\n**Boundary notes:** a low-frequency status that tolerates delay may be simpler and safer with periodic refetch. Do not add a live channel merely because the backend exposes one.\n\n**Checks:** define subscribe and unsubscribe ownership, reconnect behavior, duplicate and out-of-order handling, authorization changes, deletion semantics, and the point at which cached data is considered stale.\n\n**Anti-pattern:** Apply every received event to whichever screen is currently mounted without a scope or ordering contract.\n\n**Why it fails:** A late old-session event, duplicate or missing delta can corrupt a new view or make incomplete data appear current.\n\n**Bad example (illustrative):** On any socket message: append payload to the current list.\n\n**Better example (illustrative):** Bind the subscription to its scope; apply the declared event identity/version rules; recover a proven gap from an authoritative snapshot.\n\n**Legitimate exceptions:** Use SDK or server guarantees when they already provide ordering and recovery. Do not add a competing client reconciliation system. Infrequent data may only need polling.\n\n**Verification scenario:** Reconnect, switch scope, deliver a duplicate and test a documented gap. Verify cleanup, deletion handling and truthful stale/current state.\n\n**Additional decision constraints:** A guard should reject updates proven invalid under the stream contract, not every update for a currently unknown local entity. Otherwise the first valid creation event can never populate the view. Reconnect may require dropping an obsolete buffered generation and letting a fresh authoritative snapshot win; use the existing transport/SDK guarantee rather than inventing a second reconciliation system."
+    },
+    {
+      "id": "storage-versioned-boundary",
+      "topics": [
+        "storage",
+        "types",
+        "boundaries",
+        "implementation"
+      ],
+      "content": "## Treat persistence as a versioned boundary\n\nPersist the smallest durable representation and validate it on read. Include a version when the shape can evolve, migrate deliberately, and keep volatile or derivable data out of storage. Storage adapters should expose domain operations rather than leaking serialization details.\n\n**Apply when:** state must survive reloads, process restarts, offline periods, or schema changes.\n\n**Boundary notes:** query caches, secrets, short-lived UI state, and values cheaply recomputed from authoritative data often should not be persisted.\n\n**Checks:** define ownership, key namespace, expiry, corruption behavior, migration, deletion, multi-tab coordination, and privacy. Ensure initialization resolves for valid, missing, invalid, and inaccessible storage.\n\n**Anti-pattern:** Persist a complete runtime object and assume every future read has the same valid shape.\n\n**Why it fails:** Old or corrupt data can break initialization, expose secrets, or freeze the UI in a hydration state that never resolves.\n\n**Bad example (illustrative):** JSON.parse(stored) is assigned directly to current state; a read error leaves ready=false forever.\n\n**Better example (illustrative):** Persist the minimum durable versioned shape. Validate and migrate supported versions; settle initialization on missing, corrupt and inaccessible storage according to the approved policy.\n\n**Legitimate exceptions:** Not every value needs persistence. Do not silently erase unsent user work when it fails validation; recovery behavior is a product decision.\n\n**Verification scenario:** Load valid, old, future, corrupt and unavailable storage. Every path must reach an explicit usable or recoverable state."
+    },
+    {
+      "id": "distributed-invariants-and-failure",
+      "topics": [
+        "distributed",
+        "boundaries",
+        "planning",
+        "review"
+      ],
+      "content": "## Design distributed work around invariants\n\nNetworked operations can be delayed, duplicated, reordered, or partially completed. Start from the invariant that must remain true, then choose idempotency, transactions, coordination, or compensation according to the failure cost and system boundary.\n\n**Apply when:** work crosses processes, databases, queues, or external providers.\n\n**Boundary notes:** local in-memory transformations do not need distributed coordination. Stronger guarantees also carry latency and availability costs that may not serve the product requirement.\n\n**Checks:** name the authoritative record, retry owner, idempotency scope, timeout meaning, partial-failure outcome, and observability. Distinguish an unknown result from a confirmed failure.\n\n**Anti-pattern:** Treat a timeout as proof that a remote mutation never happened.\n\n**Why it fails:** The operation can commit remotely before its response is lost, so a blind retry can repeat its effect.\n\n**Bad example (illustrative):** Request times out; create a new operation and dispatch the same consequential write again.\n\n**Better example (illustrative):** Preserve the logical operation identity, read back authoritative state, and reconcile an unknown outcome before retrying a mutation.\n\n**Legitimate exceptions:** Pure reads and idempotent operations can have bounded retry policies. A local pure transformation needs no distributed coordinator.\n\n**Verification scenario:** Inject failure before dispatch and after remote commit. Verify one intended effect and distinct confirmed-failure versus unknown-outcome states."
+    },
+    {
+      "id": "distributed-replication-partitioning",
+      "topics": [
+        "distributed",
+        "data",
+        "planning"
+      ],
+      "content": "## Choose replication and partitioning from access patterns\n\nReplication improves availability and read scale but introduces lag and conflict choices. Partitioning improves scale by dividing ownership but makes cross-partition operations and hot keys more expensive. Select keys from observed access and growth patterns.\n\n**Apply when:** one node or database boundary cannot meet availability, throughput, locality, or recovery needs.\n\n**Boundary notes:** adding replicas or shards before measuring the bottleneck creates operational complexity without a demonstrated benefit.\n\n**Checks:** define read consistency, failover, conflict resolution, rebalance, hot-key behavior, backup recovery, and cross-partition query costs. Test failure and recovery, not only steady-state throughput.\n\n**Anti-pattern:** Add replicas or shards before identifying the limiting resource and consistency requirement.\n\n**Why it fails:** The system gains replication lag, cross-owner coordination and recovery work without removing the measured bottleneck.\n\n**Bad example (illustrative):** Shard every table because traffic might eventually grow.\n\n**Better example (illustrative):** Measure the workload and bottleneck first; choose a partition or replica strategy only for the demonstrated capacity, locality or recovery need.\n\n**Legitimate exceptions:** A clear contractual locality or availability requirement can justify distribution before throughput saturation. Replication and partitioning solve different problems.\n\n**Verification scenario:** Measure the target workload, hot-key distribution, failover behavior and data loss boundary; verify the proposed split improves the actual constraint."
+    },
+    {
+      "id": "dataflow-batch-stream-choice",
+      "topics": [
+        "distributed",
+        "data",
+        "realtime",
+        "planning"
+      ],
+      "content": "## Match dataflow mode to latency and correction needs\n\nBatch processing offers bounded input and straightforward replay. Stream processing reduces latency but requires event-time, ordering, checkpoint, and correction semantics. A durable log can connect both when consumers need independent replay.\n\n**Apply when:** deriving indexes, analytics, notifications, search views, or materialized projections from changing records.\n\n**Boundary notes:** a synchronous request is preferable when the caller needs an immediate authoritative result and the operation fits one ownership boundary.\n\n**Checks:** define event identity, schema evolution, replay, late data, backfill, duplicate handling, and how derived views are rebuilt. Keep the source record separate from projections.\n\n**Anti-pattern:** Use streaming merely because an event infrastructure exists, or use batch despite an explicit low-latency requirement.\n\n**Why it fails:** Complexity or stale results are introduced without serving the accepted latency and correction contract.\n\n**Bad example (illustrative):** A daily report gains a continuously maintained stateful pipeline with no freshness requirement.\n\n**Better example (illustrative):** Use a bounded replayable batch for daily output; use a stream when latency warrants it and define lateness, replay and corrections.\n\n**Legitimate exceptions:** A synchronous operation can remain in one transaction when the caller needs an immediate authoritative result. Hybrid paths require explicit ownership of shared outputs.\n\n**Verification scenario:** Test freshness, replay and corrected input against the accepted outcome, including what users see while a derived view catches up."
+    },
+    {
+      "id": "tests-risk-observable-behavior",
+      "topics": [
+        "testing",
+        "review",
+        "implementation"
+      ],
+      "content": "## Test behavior at the cheapest useful boundary\n\nA test earns its cost by detecting a realistic regression. Pure transformations and state machines fit unit tests; boundary adapters need contract tests; a few critical journeys need integration or browser coverage. Assert observable outcomes instead of internal call order.\n\n**Apply when:** behavior contains branching, money or permission risk, serialization, concurrency, recovery, or a previously observed failure.\n\n**Boundary notes:** tests that repeat type checks, mirror implementation details, or only confirm static text often create noise without protecting behavior.\n\n**Checks:** state the regression each test prevents, control time and randomness, isolate external systems behind stable fixtures, and include failure and cancellation where they change the outcome. Remove flaky timing guesses in favor of observable completion.\n\n**Anti-pattern:** Assert that the implementation called a helper rather than that the user-visible outcome is correct.\n\n**Why it fails:** Refactoring breaks harmless tests while the real regression can still ship; timing sleeps make results nondeterministic.\n\n**Bad example (illustrative):** Assert helper was called twice, or sleep for an arbitrary delay and assume the request completed.\n\n**Better example (illustrative):** Assert the observable state after a controlled response or explicit completion signal, with a regression scenario tied to a real requirement.\n\n**Legitimate exceptions:** Call counts can be the actual contract for deduplication or resource ownership. Mock infrastructure at a boundary; do not mock the behavior being proved.\n\n**Verification scenario:** Demonstrate that the known incorrect behavior fails the test and a valid alternative implementation passes it.\n\n**Additional decision constraints:** Repeated deterministic architecture rules should become the narrowest suitable type, lint, dependency, dead-code or build check. Automate mechanical findings and deterministic autofixes; keep semantic architecture and product judgment in review. Run the repository quality command appropriate to the changed surface and inspect its resulting diff rather than treating autofix success as acceptance."
+    },
+    {
+      "id": "patterns-costed-selection",
+      "topics": [
+        "planning",
+        "review",
+        "variants",
+        "modules"
+      ],
+      "content": "## Select patterns by pressure and cost\n\nUse the smallest design that makes current variation, ownership, and failure behavior clear. A registry or resolver becomes valuable when several stable variants implement the same operations and exhaustive coverage matters. Keep direct code when the variation is small or still changing shape.\n\n**Apply when:** choosing a provider, state machine, adapter, resolver, registry, or shared abstraction.\n\n**Boundary notes:** wrapping every library, extracting every repeated line, or building for hypothetical variants adds navigation and maintenance cost. Repetition can be evidence to observe before it becomes an abstraction.\n\n**Checks:** list the concrete variants, shared operations, expected growth, replacement boundary, and failure modes. Compare the abstraction's ongoing cost with the duplication or coupling it removes.\n\n**Anti-pattern:** Introduce a resolver, provider hierarchy or framework before stable variation creates a concrete need.\n\n**Why it fails:** Extra concepts and navigation cost exceed the coupling or duplication removed.\n\n**Bad example (illustrative):** Wrap two unrelated functions behind a generic plug-in interface for imagined future backends.\n\n**Better example (illustrative):** Keep direct code for small variation. Use exhaustive dispatch when several stable variants share the same operations and missing-case detection has practical value.\n\n**Legitimate exceptions:** A security or compatibility boundary can justify an adapter even for one implementation. Variant count alone is not an architectural rule.\n\n**Verification scenario:** Add the next real variant on paper and compare changed files, invalid states and debugging paths under the direct and abstracted designs.\n\n**Additional decision constraints:** Diagnose complexity as change amplification, cognitive load and hidden dependencies. Prioritize the cost in frequently changed surfaces rather than optimizing a rarely touched implementation for an abstract cleanliness score. A useful abstraction hides meaningful complexity behind a small stable interface; a pass-through wrapper may hide nothing."
+    },
+    {
+      "id": "react-render-purity-and-identity",
+      "topics": [
+        "components",
+        "state",
+        "effects",
+        "review"
+      ],
+      "content": "## Keep render pure and identity stable\n\nRendering computes UI from current inputs. Do not mutate refs, external objects, subscriptions, or other components during render. Put interaction-caused work in event handlers and lifecycle synchronization after commit. Stable list keys and component positions preserve the intended identity across insertion, removal, sorting, and conditional branches.\n\n**Apply when:** rendering a mutable list, resetting component state, or touching a ref or external object from component code.\n\n**Boundary notes:** generating a fresh key during render forces replacement rather than stability. An index key is safe only for a truly fixed list whose items never reorder, insert, or delete.\n\n**Checks:** keys are unique among siblings and stable for the same entity, render is repeatable, and every mutation has an explicit event or commit-time owner.\n\n**Anti-pattern:** Mutate an external value during render or assign a fresh key to each render of the same entity.\n\n**Why it fails:** Repeated or abandoned rendering can produce side effects, while changing keys remounts components and loses local user state.\n\n**Bad example (illustrative):** items.map(item => <Row key={randomId()} item={item} />)\n\n**Better example (illustrative):** items.map(item => <Row key={item.id} item={item} />); perform external work in its event or committed lifecycle owner.\n\n**Legitimate exceptions:** An intentional identity change can reset a subtree. A fixed positional list can use positional identity only when insertion, removal and reordering truly cannot occur.\n\n**Verification scenario:** Edit a row and reorder the list: state must follow the entity. Repeated rendering must not publish an external effect."
+    },
+    {
+      "id": "react-refs-and-commit-timing",
+      "topics": [
+        "components",
+        "effects",
+        "implementation",
+        "review"
+      ],
+      "content": "## Use refs for imperative work after commit\n\nA ref stores information outside rendering or points to an imperative resource. Read or write it from events, effects, or ref callbacks, not while rendering. A deterministic one-time lazy initialization can be safe when it creates no external effect and always yields the same component-owned object. When code must observe DOM created by a state update, prefer a layout or effect boundary; force a synchronous commit only for a proven integration timing requirement.\n\n**Apply when:** focusing, scrolling, measuring, controlling a non-React widget, or maintaining a keyed collection of DOM nodes.\n\n**Boundary notes:** visible data belongs in state. A synchronous flush can reduce batching and should not become the default fix for ordering confusion.\n\n**Checks:** handle null and removal in ref callbacks, keep imperative scope local, prove the DOM timing requirement, and test repeated mount and cleanup.\n\n**Anti-pattern:** Expect ref mutation to update visible UI, or read newly requested DOM before React has committed it.\n\n**Why it fails:** Refs do not schedule rendering and state setters do not synchronously replace the DOM.\n\n**Bad example (illustrative):** setExpanded(true); immediately measure the not-yet-mounted details node.\n\n**Better example (illustrative):** Measure the committed node through the appropriate ref or layout lifecycle; use state for data that determines rendered output.\n\n**Legitimate exceptions:** Deterministic one-time ref initialization can be valid. A forced synchronous commit needs a demonstrated imperative integration requirement, not a general ordering workaround.\n\n**Verification scenario:** Test initial mount, update and removal; verify null handling and the exact committed DOM measured, without relying on arbitrary delays."
+    },
+    {
+      "id": "ui-semantics-and-accessibility",
+      "topics": [
+        "components",
+        "accessibility",
+        "review"
+      ],
+      "content": "## Preserve native semantics and accessible names\n\nChoose elements by behavior: buttons perform actions, links navigate, labels identify controls, and form semantics support keyboard submission and validation. Visual-only icons and status indicators need an accessible name or nearby hidden text. Polymorphic components must preserve the semantics and required attributes of the selected element.\n\n**Apply when:** building controls, forms, icon buttons, navigation, dialogs, or a polymorphic primitive.\n\n**Boundary notes:** visual styling does not change an element's role. A disabled control can also hide why an action is unavailable, so provide understandable feedback when users need it.\n\n**Checks:** keyboard operation, focus order, accessible name, label association, state announcement, and element-specific required attributes.\n\n**Anti-pattern:** Choose an element only for appearance and add click handling without its native interaction contract.\n\n**Why it fails:** Keyboard users and assistive technology may be unable to identify or activate the control.\n\n**Bad example (illustrative):** A clickable div containing only an unlabeled decorative icon performs a destructive action.\n\n**Better example (illustrative):** Use a button with an accessible action name for the action, a link for navigation, and associated labels for form controls.\n\n**Legitimate exceptions:** A custom widget may need explicit roles and keyboard behavior when native elements cannot express its approved interaction. Styling alone is not that justification.\n\n**Verification scenario:** Operate the journey without a mouse; inspect accessible name, focus order, announced state and recovery focus."
+    },
+    {
+      "id": "component-error-boundaries",
+      "topics": [
+        "components",
+        "errors",
+        "implementation",
+        "review"
+      ],
+      "content": "## Contain rendering failures at useful boundaries\n\nAn error boundary limits the UI affected by a render failure and presents a recovery path appropriate to that region. Place boundaries around independently useful routes, panels, or integrations, and record enough context to diagnose the failure.\n\n**Apply when:** one subtree can fail without making the entire application unusable, including lazy-loaded or third-party UI.\n\n**Boundary notes:** boundaries do not catch every asynchronous event or server failure, and a single root fallback gives poor isolation. Do not expose sensitive diagnostic details to users.\n\n**Checks:** fallback usefulness, retry or navigation path, reset trigger, logging, nested-boundary behavior, and accessibility of the failure state.\n\n**Anti-pattern:** Assume one root boundary catches every failure, including asynchronous event-handler failures.\n\n**Why it fails:** An unrelated panel can take down the whole screen, while a failed event promise bypasses the supposed recovery UI.\n\n**Bad example (illustrative):** A dashboard has only a root fallback; a failed save promise is left to that boundary.\n\n**Better example (illustrative):** Bound independently useful render regions and handle save rejection in the mutation path that owns the operation.\n\n**Legitimate exceptions:** Boundary placement should match recovery scope, not every component. Async, server-rendering and event errors need the mechanisms appropriate to their actual boundary.\n\n**Verification scenario:** Cause a render failure in one panel and a rejected user action separately. Verify useful regions survive and each failure reaches its intended recovery UI."
+    },
+    {
+      "id": "lazy-loading-boundaries",
+      "topics": [
+        "components",
+        "performance",
+        "planning",
+        "implementation"
+      ],
+      "content": "## Split loading at measured user boundaries\n\nLazy loading can reduce initial transfer and evaluation by deferring code that is not needed for the current journey. Put the asynchronous boundary around a route or independently reached feature, provide a stable loading fallback, and pair load failure with an error boundary and retry path.\n\n**Apply when:** bundle analysis shows a meaningful initial cost for code used later or rarely.\n\n**Boundary notes:** splitting tiny or immediately co-used modules adds requests and fallback churn. A fallback should not replace already useful content during routine background work.\n\n**Checks:** measured initial and subsequent latency, preloading strategy, server-render and hydration behavior, failure recovery, focus continuity, and layout stability.\n\n**Anti-pattern:** Split every small component without measuring the initial cost or subsequent loading behavior.\n\n**Why it fails:** Request waterfalls, fallback churn and repeated loading can outweigh a smaller first bundle.\n\n**Bad example (illustrative):** Lazy-load every field in a form that users open together.\n\n**Better example (illustrative):** Defer one measured, rarely reached feature behind a stable loading boundary and a load-failure recovery path.\n\n**Legitimate exceptions:** Eager loading or preloading is appropriate for highly likely next actions or tightly coupled UI. Splitting is not automatically a performance win.\n\n**Verification scenario:** Measure cold entry and opening the deferred feature. Exercise chunk failure, retry, layout stability and focus continuity."
+    },
+    {
+      "id": "dependency-reproducibility",
+      "topics": [
+        "modules",
+        "testing",
+        "operations",
+        "review"
+      ],
+      "content": "## Make dependency resolution reproducible\n\nCommit and enforce one lockfile so clean environments resolve the same dependency graph. Update dependencies intentionally in bounded changes, review release and security impact, and verify the resulting graph in continuous integration.\n\n**Apply when:** builds, tests, or generated artifacts depend on third-party packages.\n\n**Boundary notes:** exact versions written everywhere do not replace a valid lockfile, and indefinite pinning prevents needed fixes. Broad automatic upgrades make regressions harder to isolate.\n\n**Checks:** frozen install in CI, runtime and package-manager versions, lockfile review, transitive changes, rollback path, and periodic supported-version updates.\n\n**Anti-pattern:** Treat exact direct versions as a substitute for a lockfile, or rewrite the dependency graph incidentally during unrelated work.\n\n**Why it fails:** Transitive resolution and toolchain differences can change behavior without a reviewable source change.\n\n**Bad example (illustrative):** CI resolves dependencies afresh while developers commit results from different package-manager versions.\n\n**Better example (illustrative):** Use the repository lockfile and pinned toolchain with a frozen install; isolate intentional upgrades and inspect their transitive impact.\n\n**Legitimate exceptions:** Reproducibility does not mean permanent version freeze. Security and compatibility updates still need a deliberate, verified path.\n\n**Verification scenario:** Install from a clean checkout with the supported toolchain, then compare the graph and run the behavior affected by an upgrade."
+    },
+    {
+      "id": "functional-composition-pipelines",
+      "topics": [
+        "types",
+        "data",
+        "implementation"
+      ],
+      "content": "## Compose transformations when the dataflow stays visible\n\nA typed pipeline can make a sequence of pure transformations read in execution order while preserving the output type of each step as the input to the next. Use named stages when they carry domain meaning and expose failure explicitly.\n\n**Apply when:** several reusable transformations form one linear flow and intermediate types clarify the contract.\n\n**Boundary notes:** one or two ordinary method calls are often clearer. Pipelines that hide branching, side effects, async cancellation, or error policy make control flow harder to inspect.\n\n**Checks:** each stage is independently named or obvious, types connect without assertions, errors remain visible, and debugging can identify the failing stage.\n\n**Anti-pattern:** Hide branching, failure handling or external mutations inside an apparently pure transformation chain.\n\n**Why it fails:** Readers cannot tell where effects occur or which stage owns an error or cancellation.\n\n**Bad example (illustrative):** pipe(parse, maybeSendNetworkRequest, mutateGlobalState, format) looks like value transformation.\n\n**Better example (illustrative):** Compose named pure transformations; keep the asynchronous operation and its error policy visible in the calling workflow.\n\n**Legitimate exceptions:** Ordinary method chaining or two direct calls can be clearer. A pipeline should earn its abstraction through a visible dataflow and compatible types.\n\n**Verification scenario:** Inject an invalid intermediate value and identify the failing boundary. Test pure stages independently and prove the pipeline introduces no hidden external writes."
+    },
+    {
+      "id": "navigation-state-contracts",
+      "topics": [
+        "components",
+        "state",
+        "types",
+        "planning"
+      ],
+      "content": "## Model navigation state by durability and shareability\n\nChoose URL state for destinations users should refresh, bookmark, share, or revisit through browser history. In-memory view state fits contained flows that intentionally disappear on reload. Typed destination registries can couple each destination with its valid payload and make invalid navigation calls fail early.\n\n**Apply when:** designing a route, modal flow, wizard, desktop view stack, or extension panel.\n\n**Boundary notes:** hiding durable product state only in memory breaks deep links and recovery. Encoding sensitive or large ephemeral payloads in a URL creates different risks.\n\n**Checks:** refresh, back and forward, direct entry, persistence, payload validation, authorization, and unknown destination behavior.\n\n**Anti-pattern:** Keep a shareable destination only in memory, or place sensitive transient payloads in a URL.\n\n**Why it fails:** Refresh and browser history lose the destination, or logs and copied links expose data outside its intended lifetime.\n\n**Bad example (illustrative):** A selected report is held only in a component boolean, so a shared link opens an unrelated default screen.\n\n**Better example (illustrative):** Put the stable report identifier in the route and validate it on direct entry; keep an unsaved private draft in its appropriate local owner.\n\n**Legitimate exceptions:** A disposable modal or contained wizard may intentionally use in-memory view state. Whether refresh preserves draft progress is a product requirement.\n\n**Verification scenario:** Directly open, refresh, share and navigate back through the route; verify authorization and the approved reset or persistence behavior.\n\n**Additional decision constraints:** When a route and local view state must stay aligned, define both directions: user interaction updates the route through the navigation owner, and direct entry/back/forward update the displayed view. Avoid two effects that independently try to overwrite each other."
+    },
+    {
+      "id": "react-performance-evidence",
+      "topics": [
+        "components",
+        "performance",
+        "review"
+      ],
+      "content": "## Optimize React work from measurements\n\nKeep calculations inline until profiling shows a material cost or an external API requires stable identity. Improve ownership and component boundaries before adding caches. Compiler-supported environments can remove much manual memoization, but lifecycle and integration contracts still need explicit stable identities where required.\n\n**Apply when:** an observed interaction misses its performance target and profiling identifies repeated render or calculation work.\n\n**Boundary notes:** memoizing every object, function, or component adds invalidation complexity and can cost more than recalculation. Hiding a mounted tree may preserve state but also preserves resource usage.\n\n**Checks:** reproduce the slow interaction, measure before and after, include cache invalidation inputs, and remove memoization that no longer changes the result.\n\n**Anti-pattern:** Add or remove memoization throughout an application based only on a blanket rule.\n\n**Why it fails:** Extra caches can cost more than recomputation; removing an existing identity guarantee can change integration behavior.\n\n**Bad example (illustrative):** Wrap every calculation in memoization, or delete all existing memoization because a compiler is present.\n\n**Better example (illustrative):** Profile the slow interaction, verify compiler coverage, improve ownership first, and make one measured optimization with complete invalidation inputs.\n\n**Legitimate exceptions:** Manual memoization may remain useful in uncompiled code or a documented integration contract. A cache is not a substitute for correctness or an effect lifecycle.\n\n**Verification scenario:** Compare representative before/after timings and confirm subscriptions, effect frequency and behavior remain correct after the optimization."
+    },
+    {
+      "id": "custom-hooks-intent-boundaries",
+      "topics": [
+        "components",
+        "effects",
+        "modules",
+        "implementation"
+      ],
+      "content": "## Extract hooks around a clear capability\n\nA custom hook packages stateful behavior or an external synchronization contract behind an intent-revealing API. It shares logic, not state: separate callers remain separate unless the hook connects them to the same external owner. Ordinary hooks must run from a React component or custom hook at stable top-level positions, never conditionally, in a loop, or inside a nested callback. A runtime may document a narrowly named exception for a particular primitive; treat that as version-specific rather than relaxing ordinary hook placement. Keep small local state inline when extraction would only rename primitive calls.\n\n**Apply when:** components repeat a lifecycle, browser integration, query orchestration, or cohesive state transition protocol.\n\n**Boundary notes:** a generic hook that accepts arbitrary callbacks and configuration may conceal dependencies rather than simplify them. Naming an ordinary function with a hook prefix does not make conditional hook calls valid.\n\n**Checks:** name the capability, keep hook execution pure and top-level, expose reactive inputs, constrain effects, define cleanup, and test callers with independent state.\n\n**Anti-pattern:** Assume two callers share state merely because both call the same custom hook.\n\n**Why it fails:** Extracting hook code shares a recipe, not a state instance; independent callers can drift apart.\n\n**Bad example (illustrative):** Header and editor each call useSelection(), which internally creates its own useState, yet are expected to share one selection.\n\n**Better example (illustrative):** Keep independent hooks for independent instances; put genuinely shared selection in one approved owner and expose that owner through the hook.\n\n**Legitimate exceptions:** A hook connected to the same external store can share state. Ordinary hooks still require stable call order; exceptions for specifically documented primitives do not generalize.\n\n**Verification scenario:** Render two callers and check the intended independent/shared behavior. Change branches across renders and verify hook order and cleanup remain valid.\n\nA runtime variant must not choose between calls to ordinary hooks conditionally. Use the established top-level hook composition with explicit enablement, or separate variant components whose own hook order stays stable. A shared return type does not make conditional hook execution valid."
+    },
+    {
+      "id": "ui-branching-explicitness",
+      "topics": [
+        "components",
+        "state",
+        "types",
+        "implementation",
+        "review"
+      ],
+      "content": "## Make UI branches explicit at their natural scale\n\nUse a direct boolean branch for one simple choice, a typed mapping when several stable states select values or views, and a state machine when transitions and invalid combinations matter. Booleanize short-circuit guards when a numeric zero or empty value could render accidentally.\n\n**Apply when:** JSX contains nested conditions, parallel flags can contradict each other, or variants pair rendering with behavior.\n\n**Boundary notes:** a registry for two obvious branches adds indirection, while a chain of flags cannot express transition rules. Early returns help readability but must preserve loading and error states.\n\n**Checks:** enumerate states, reject unknown variants, keep behavior with its view entry, verify transition ownership, and test each meaningful branch.\n\n**Anti-pattern:** Represent mutually exclusive states with unrelated booleans or accidentally render a numeric short-circuit value.\n\n**Why it fails:** Impossible combinations become expressible and a zero can appear as visible text instead of hiding content.\n\n**Bad example (illustrative):** isLoading=true and isError=true and hasData=false are interpreted independently; count && <Results /> renders 0.\n\n**Better example (illustrative):** Use the repository's explicit state representation and deliberate branches; use count > 0 for a numeric visibility condition.\n\n**Legitimate exceptions:** Two independent booleans are correct when both combinations are meaningful. A direct if or conditional expression can be clearer than a registry for a tiny branch.\n\n**Verification scenario:** Enumerate meaningful states and transitions, including zero, missing prerequisites and background refresh; reject impossible combinations at their owner.\n\nDistinguish membership filters from ranking or sorting. A ranking operation should not silently remove entries unless that is its approved contract. Empty-result controls and reset behavior follow approved product semantics."
+    },
+    {
+      "id": "component-style-ownership",
+      "topics": [
+        "components",
+        "composition",
+        "modules",
+        "review"
+      ],
+      "content": "## Keep layout and contextual styling ownership clear\n\nA reusable component owns its internal visual contract, while its parent layout owns spacing and placement among siblings. Expose deliberate style hooks or compose a specialized wrapper for approved variants rather than reaching through another component's boundary with unrelated selectors.\n\n**Apply when:** the same primitive appears in several layouts or contextual styling starts crossing component files.\n\n**Boundary notes:** forcing every one-off visual into a global variant bloats the primitive API. Absolute positioning and stacking are appropriate inside a component that owns a controlled positioning context.\n\n**Checks:** identify the layout owner, variant owner, stacking context, responsive behavior, theme token, and whether a local composition is clearer than another prop.\n\n**Anti-pattern:** Make a reusable child impose page-level placement or reach into its private markup from unrelated parent selectors.\n\n**Why it fails:** The component cannot move between layouts safely, and internal markup changes break external styling.\n\n**Bad example (illustrative):** A generic Card owns a page-specific left margin; a distant stylesheet targets its third nested child.\n\n**Better example (illustrative):** Let the layout own spacing between siblings and the Card own its internals; expose only deliberate visual variants.\n\n**Legitimate exceptions:** Absolute positioning is appropriate within an owned positioning context. A one-off composition does not always deserve a global design-system prop.\n\n**Verification scenario:** Reuse the primitive in two layouts and resize both; change its internal markup without changing unrelated selectors or token choices."
+    },
+    {
+      "id": "operations-load-and-tail-latency",
+      "topics": [
+        "operations",
+        "distributed",
+        "performance",
+        "planning"
+      ],
+      "content": "## Scale from workload shape and tail latency\n\nCharacterize request mix, fan-out, skew, and offered load before choosing compute-on-read, precomputation-on-write, or a hybrid for high-fan-out entities. Measure client-observed median and tail latency under representative load because a fan-out request inherits slow dependencies and queueing.\n\n**Apply when:** capacity, caching, denormalization, or distribution is being chosen for growth.\n\n**Boundary notes:** average latency hides outliers, and distributing state before one node is insufficient adds coordination cost. Extreme percentile work needs a service objective, not vanity optimization.\n\n**Checks:** load parameters, hot entities, queue depth, dependency fan-out, percentile target, degradation behavior, and headroom.\n\n**Anti-pattern:** Size a system from average response time while ignoring request fan-out, skew and queued work.\n\n**Why it fails:** A small slow tail or hot entity can dominate the user journey even when the average looks acceptable.\n\n**Bad example (illustrative):** Average latency is 40 ms, so a request waiting for 100 independent dependencies is assumed to be fast.\n\n**Better example (illustrative):** Model the actual fan-out and offered load, measure client-observed percentiles, and find the saturated or highly skewed resource.\n\n**Legitimate exceptions:** Tail optimization needs a service objective and representative traffic. Do not build a distributed system to improve an irrelevant synthetic percentile.\n\n**Verification scenario:** Load a representative skewed workload, include dependency delays and queue depth, and compare the end-user percentile against the stated objective."
+    },
+    {
+      "id": "operations-recovery-and-change",
+      "topics": [
+        "operations",
+        "testing",
+        "planning",
+        "review"
+      ],
+      "content": "## Make recovery and change executable\n\nHardware redundancy does not correct correlated software, configuration, or operator faults. Design staged rollout, rollback, restore or recompute, and routine maintenance as observable workflows. Recovery evidence comes from exercising the restored system and checking invariants.\n\n**Apply when:** a service stores durable data or changes production behavior.\n\n**Boundary notes:** a successful backup write is not proof of recovery, and maximizing availability without a safe rollback can prolong damage.\n\n**Checks:** ownership, runbook, restore objective, data validation, rollback compatibility, staged exposure, alerting, and a recent recovery exercise.\n\n**Anti-pattern:** Equate redundant hardware or a successful backup operation with recoverability from a bad deployment.\n\n**Why it fails:** Correlated software or configuration errors can affect every replica, and an unread backup may be unusable.\n\n**Bad example (illustrative):** All replicas received the same incompatible migration; the runbook only says restart a node.\n\n**Better example (illustrative):** Define staged exposure, compatible rollback or forward repair, and a restore/recompute procedure that checks the recovered data.\n\n**Legitimate exceptions:** Some schema changes are intentionally forward-only. In that case document and test the approved recovery path rather than claiming rollback exists.\n\n**Verification scenario:** Exercise a representative failed rollout and restore in a non-production environment; verify data invariants and recovery time."
+    },
+    {
+      "id": "data-model-access-patterns",
+      "topics": [
+        "data",
+        "storage",
+        "planning",
+        "review"
+      ],
+      "content": "## Choose a data model from relationships and access paths\n\nDocuments suit cohesive aggregates usually read together. Relations suit evolving access paths and many-to-many joins. Variable-depth relationship traversal can justify a graph model. Schema-on-read moves validation to consumers rather than removing schema.\n\n**Apply when:** selecting a primary representation or translating between service and storage models.\n\n**Boundary notes:** documents chosen only to avoid migrations can create application-side joins and consistency work. A graph adds little for a simple keyed aggregate.\n\n**Checks:** read and write paths, relationship cardinality, locality, update granularity, validation owner, query evolution, and migration strategy.\n\n**Anti-pattern:** Choose a document or graph store solely to avoid schema work or because its model appears flexible.\n\n**Why it fails:** Joins, integrity checks and migration responsibilities reappear in less visible application code.\n\n**Bad example (illustrative):** An evolving many-to-many model is embedded into documents and updated through scattered manual copies.\n\n**Better example (illustrative):** Start from relationships and access paths; choose cohesive documents, relational joins or variable-depth graph traversal according to those needs.\n\n**Legitimate exceptions:** Denormalized duplication can be appropriate for a measured read path when one authority and an update/rebuild contract are explicit.\n\n**Verification scenario:** Walk through a relationship change, a new query and a partial update; identify where each invariant is enforced and how old data evolves."
+    },
+    {
+      "id": "storage-index-workload-tradeoffs",
+      "topics": [
+        "storage",
+        "data",
+        "performance",
+        "planning",
+        "review"
+      ],
+      "content": "## Treat indexes as maintained derived data\n\nIndexes accelerate chosen reads at the cost of writes, space, rebuilds, and operational work. Hash lookup serves exact keys, sorted structures serve ranges, log-structured storage favors sequential writes with compaction costs, and in-place trees trade different recovery and locking behavior.\n\n**Apply when:** choosing or adding an index or storage engine.\n\n**Boundary notes:** an index for every query amplifies writes. In-memory serving still needs a durability and restart contract.\n\n**Checks:** exact versus range reads, write and read amplification, absent-key behavior, tombstones, checksums, compaction bandwidth and temporary disk, tail latency during maintenance, and rebuild procedure.\n\n**Anti-pattern:** Add an index for every read without accounting for its maintained state and maintenance costs.\n\n**Why it fails:** Write amplification, storage and compaction can worsen the actual latency target or exhaust headroom.\n\n**Bad example (illustrative):** Add several overlapping indexes to speed one rare report on a write-heavy table.\n\n**Better example (illustrative):** Measure query selectivity and workload; choose the minimum useful indexes and verify write cost, rebuild and maintenance behavior.\n\n**Legitimate exceptions:** A critical low-frequency query can still justify an index. The decision is its service requirement and cost, not frequency alone.\n\n**Verification scenario:** Compare exact/range access, write throughput, tail latency during compaction or rebuild, and temporary disk requirements."
+    },
+    {
+      "id": "data-transactional-versus-analytical",
+      "topics": [
+        "data",
+        "storage",
+        "planning"
+      ],
+      "content": "## Separate transactional and analytical workload needs\n\nPoint reads and updates differ from wide scans and aggregates. Column-oriented projection and compression can help analytical scans while making mutation more expensive. Isolate analytical work from latency-sensitive transactions when contention matters.\n\n**Apply when:** operational queries, reporting, and large aggregates compete for the same resources.\n\n**Boundary notes:** duplicating data into an analytical store adds freshness and pipeline responsibilities. A materialized aggregate helps known reads but increases write maintenance.\n\n**Checks:** projection, scan volume, update rate, freshness requirement, workload isolation, backfill, and cutover or rebuild.\n\n**Anti-pattern:** Run unbounded analytical scans through the same constrained resources as latency-sensitive transactions.\n\n**Why it fails:** The scan competes for CPU, memory, cache and I/O, causing unpredictable transactional latency.\n\n**Bad example (illustrative):** A dashboard repeatedly scans all historical rows on the primary database during peak writes.\n\n**Better example (illustrative):** Use an appropriately indexed bounded query, materialized aggregate or isolated analytical projection according to measured cost and required freshness.\n\n**Legitimate exceptions:** A small occasional scan may fit the existing database. A second store adds a synchronization and recovery obligation that must be justified.\n\n**Verification scenario:** Run reporting and transactional load together; measure freshness and tail latency, then exercise projection rebuild if a separate read model is chosen."
+    },
+    {
+      "id": "encoding-reader-writer-compatibility",
+      "topics": [
+        "types",
+        "storage",
+        "boundaries",
+        "implementation",
+        "review"
+      ],
+      "content": "## Test both directions of schema evolution\n\nMixed deployments and durable old records require new readers with old writers and old readers with new writers. Preserve stable field identities, never reuse removed tags, add fields with compatible defaults, and retain unknown data through read-modify-write when the format requires it.\n\n**Apply when:** data persists across versions or crosses services, queues, plugins, or client releases.\n\n**Boundary notes:** matching current producer and consumer types proves only one moment. Language-object deserialization also creates version, language, and security coupling.\n\n**Checks:** compatibility matrix, writer schema availability, absence versus default, numeric precision, unknown fields, rolling upgrade, queued old messages, and rollback.\n\n**Anti-pattern:** Test only the newest producer with the newest consumer and assume a rolling deployment is compatible.\n\n**Why it fails:** Old messages, stored records and old binaries can remain active while the new schema is already being written.\n\n**Bad example (illustrative):** Reuse a deleted numeric field tag for a different meaning after upgrading the current service.\n\n**Better example (illustrative):** Keep field identities stable and test old-reader/new-writer plus new-reader/old-writer behavior, including rollback and queued records.\n\n**Legitimate exceptions:** A coordinated breaking change is possible when all participants and old data are explicitly migrated or version-separated. Defaults must preserve approved meaning.\n\n**Verification scenario:** Run the compatibility matrix with absent and unknown fields, large numeric values and read-modify-write round trips."
+    },
+    {
+      "id": "replication-session-and-failover-guarantees",
+      "topics": [
+        "distributed",
+        "data",
+        "realtime",
+        "planning",
+        "review"
+      ],
+      "content": "## Specify session guarantees and failover loss\n\nSynchronous replication trades latency and availability for replicated durability. Asynchronous failover can lose acknowledged but unreplicated writes and needs an old-leader fencing and rejoin path. Define read-your-writes, monotonic reads, and causal-prefix reads separately because routing and progress barriers solve different guarantees.\n\n**Apply when:** followers serve reads or a leader can fail over.\n\n**Boundary notes:** arbitrary sticky-session timeouts do not prove read-your-writes, especially across devices. An elected leader alone does not make arbitrary replica reads current.\n\n**Checks:** acknowledgement boundary, bootstrap snapshot plus log position, lag, session progress token, cross-device behavior, failover loss, and rejoin fencing.\n\n**Anti-pattern:** Assume an elected leader makes follower reads current or that a fixed sticky-routing delay proves read-your-writes.\n\n**Why it fails:** Replication delay and failover can exceed the guessed delay or lose writes outside the acknowledged durability boundary.\n\n**Bad example (illustrative):** Read from a random follower one second after a write because replication is usually fast.\n\n**Better example (illustrative):** Define the session guarantee and route through an authority or progress barrier that can prove the required write has been applied.\n\n**Legitimate exceptions:** Stale reads can be acceptable when the product explicitly tolerates them. Synchronous replication strengthens a stated boundary at latency and availability cost.\n\n**Verification scenario:** Delay a replica, switch devices and fail over; verify the promised read guarantee and acknowledged-write loss policy."
+    },
+    {
+      "id": "replication-conflict-and-quorum-contract",
+      "topics": [
+        "distributed",
+        "data",
+        "planning",
+        "review"
+      ],
+      "content": "## Define conflict semantics beyond quorum arithmetic\n\nMulti-writer and offline operation create asynchronous conflicts. Route an aggregate to one owner when feasible; otherwise retain concurrent versions and use a domain-approved convergent merge. Causal context distinguishes overwrite from concurrency, and tombstones preserve removals during merge.\n\n**Apply when:** writes can reach more than one leader or leaderless replicas.\n\n**Boundary notes:** last-write-wins discards data and is suitable only when loss is approved. Overlapping read and write counts alone do not prove linearizability under partial writes, replacement, or sloppy placement.\n\n**Checks:** version context, merge owner, removal semantics, read repair, background anti-entropy, cold-key convergence, partial-write handling, and accepted loss.\n\n**Anti-pattern:** Assume overlapping read/write counts make all operations linearizable, or resolve every concurrent update by the latest wall-clock timestamp.\n\n**Why it fails:** Partial writes, sloppy placement and clock uncertainty can violate the assumed visibility; last-write-wins may silently discard a legitimate update.\n\n**Bad example (illustrative):** Two offline edits are merged by whichever client clock reports the later time.\n\n**Better example (illustrative):** Prefer one aggregate owner where feasible; otherwise preserve causal context and use a domain-approved convergent merge or explicit conflict resolution.\n\n**Legitimate exceptions:** Lossy overwrite can be acceptable for a deliberately last-value-wins field. That permission does not transfer to balances, counters or arbitrary user edits.\n\n**Verification scenario:** Run concurrent writes, partial acknowledgements and a replica replacement; verify accepted loss, removal semantics and convergence of cold as well as hot keys."
+    },
+    {
+      "id": "partitioning-keys-indexes-and-rebalance",
+      "topics": [
+        "distributed",
+        "data",
+        "planning",
+        "review"
+      ],
+      "content": "## Partition from key distribution and query shape\n\nRange keys preserve scans but can concentrate sequential writes. Hashing spreads distinct keys but loses locality and cannot split one hot key. Local secondary indexes keep writes local and scatter reads; global term indexes target reads while adding distributed write maintenance.\n\n**Apply when:** data or traffic must be divided across owners.\n\n**Boundary notes:** more shards do not improve one dominant hot key or global joins. Salting a key moves complexity into read aggregation and must fit operation semantics.\n\n**Checks:** skew, range needs, hot-key mitigation, index placement, resize algorithm, rebalance bandwidth, overload prevention, routing metadata ownership, and update propagation.\n\n**Anti-pattern:** Expect hashing more partitions to solve one overwhelmingly hot key, or change the partition-count formula without a migration.\n\n**Why it fails:** One key remains owned by one partition and a new modulo can remap most data while readers still use the old routing.\n\n**Bad example (illustrative):** Shard by hash(customerId), then increase the shard count to fix one dominant customer.\n\n**Better example (illustrative):** Measure skew and query locality; choose a domain-compatible hot-key strategy and a deliberate routing/rebalance protocol.\n\n**Legitimate exceptions:** Salting helps only if the operation can split and later aggregate correctly. Ordered range access and global indexes impose different costs from keyed lookup.\n\n**Verification scenario:** Exercise a skewed workload and rebalance under traffic; verify no key is lost, doubly owned or routed through stale metadata."
+    },
+    {
+      "id": "transactions-isolation-contract",
+      "topics": [
+        "distributed",
+        "data",
+        "mutations",
+        "planning",
+        "review"
+      ],
+      "content": "## Name the transaction guarantee by anomaly\n\nAtomic rollback, application invariants, isolation, and durability are distinct. Isolation labels vary across engines, so state which anomalies the chosen level prevents. Read committed blocks dirty reads and writes but does not give a consistent multi-query snapshot; snapshot isolation is not automatically serializable.\n\n**Apply when:** several reads or writes must preserve an invariant under concurrency.\n\n**Boundary notes:** a transaction cannot protect an external effect or another store outside its boundary without an additional protocol.\n\n**Checks:** dirty read and write, non-repeatable read, lost update, write skew, phantom, retry behavior, durability boundary, and external side effects.\n\n**Anti-pattern:** Treat a transaction label as proof that every application invariant is protected.\n\n**Why it fails:** Atomic rollback and isolation are different guarantees, and engines assign different behavior to similarly named levels.\n\n**Bad example (illustrative):** A multi-query report assumes one consistent snapshot merely because its reads run in a read-committed transaction.\n\n**Better example (illustrative):** Name the forbidden anomaly, choose the engine guarantee that prevents it, and keep the entire invariant within that boundary.\n\n**Legitimate exceptions:** Read committed can be sufficient for operations whose invariants do not depend on a stable multi-query view. External effects remain outside a local database transaction.\n\n**Verification scenario:** Run a concurrent schedule that would violate the actual invariant and confirm the documented blocking, visibility or abort behavior."
+    },
+    {
+      "id": "transactions-lost-updates-and-cas",
+      "topics": [
+        "distributed",
+        "data",
+        "mutations",
+        "implementation",
+        "review"
+      ],
+      "content": "## Prevent lost updates at the write boundary\n\nA read-modify-write cycle can overwrite a concurrent change. Prefer an atomic relative update, explicit lock, or an atomic compare-and-set or version condition. Verify the affected result and retry the whole read, compute, and write against fresh state.\n\n**Apply when:** a new value depends on the value previously read.\n\n**Boundary notes:** a stale snapshot WHERE condition is not necessarily a correct current-value comparison, and conflict detection depends on the engine and isolation level. Single-key atomicity cannot protect a cross-row predicate.\n\n**Checks:** atomic evaluation, result inspection, bounded retry, fresh reread, contention behavior, idempotent external work, and engine-specific proof.\n\n**Anti-pattern:** Read a value, calculate locally and unconditionally overwrite a concurrent writer's update.\n\n**Why it fails:** Each individual write can be atomic while the read-compute-write sequence still loses an update.\n\n**Bad example (illustrative):** Two workers read count=5; each writes count=6, losing one increment.\n\n**Better example (illustrative):** Use an atomic relative increment or a verified version comparison. On conflict, reread and recompute the whole attempt.\n\n**Legitimate exceptions:** A user-authorized absolute replacement is a different operation from incrementing a prior value. Single-row comparison does not protect a cross-row capacity predicate.\n\n**Verification scenario:** Force both workers to read before either writes; verify the final count or explicit conflict and ensure retries do not repeat external effects."
+    },
+    {
+      "id": "transactions-write-skew-and-phantoms",
+      "topics": [
+        "distributed",
+        "data",
+        "mutations",
+        "planning",
+        "review"
+      ],
+      "content": "## Protect predicates from write skew and phantoms\n\nTwo transactions can each observe a valid predicate, update different rows, and jointly violate the invariant without overwriting each other. Protect the complete predicate with serializable isolation or correct predicate, range, or common-guard locking.\n\n**Apply when:** an invariant depends on a count, absence, range, capacity, or multiple records.\n\n**Boundary notes:** locking only rows that currently exist misses a concurrent insert into an empty result. Atomic updates to separate keys do not protect their combined constraint.\n\n**Checks:** encode the invariant, run concurrent compatible reads followed by incompatible writes, inspect insert phantoms, and verify abort or blocking behavior.\n\n**Anti-pattern:** Protect an aggregate invariant by locking only currently matching rows or by comparing versions of separate written rows.\n\n**Why it fails:** Concurrent inserts or disjoint writes can leave every individual row valid while their combined result violates the constraint.\n\n**Bad example (illustrative):** Each reservation reads available capacity, locks its own new row and inserts, exceeding the shared limit.\n\n**Better example (illustrative):** Protect the complete capacity predicate with proven serializable execution or a common guard that every relevant writer locks.\n\n**Legitimate exceptions:** A database constraint that directly expresses the invariant may be simpler. Locking an empty result does not necessarily lock the absence of future matches.\n\n**Verification scenario:** Coordinate competing reads before their inserts, including the empty-set case; verify one aborts or waits rather than both committing an invalid aggregate."
+    },
+    {
+      "id": "transactions-serializable-costs",
+      "topics": [
+        "distributed",
+        "data",
+        "performance",
+        "planning",
+        "review"
+      ],
+      "content": "## Choose serializable execution with its retry and contention costs\n\nSerial execution is simple for short local work. Two-phase locking can block, deadlock, and amplify tails; serializable snapshot approaches detect dangerous dependencies and abort. Keep transactions short and define whole-transaction retry boundaries.\n\n**Apply when:** invariants require serializable behavior and the expected contention fits the system.\n\n**Boundary notes:** serializability does not fix races outside the transaction boundary, and blindly retrying can duplicate external side effects.\n\n**Checks:** contention, deadlock or abort rate, retry ownership, partition coordination, transaction duration, tail latency, and external-effect placement.\n\n**Anti-pattern:** Retry only the last SQL statement after a transaction failure, or retry a transaction that already performed an external effect.\n\n**Why it fails:** The old reads no longer support the decision, and repeated attempts can repeat an effect outside the database rollback boundary.\n\n**Bad example (illustrative):** Read eligibility, send a notification, encounter serialization failure, then resend while retrying only the write.\n\n**Better example (illustrative):** Retry the complete read-decide-write transaction from fresh state with a bounded policy; place external effects behind an appropriate committed record and deduplication contract.\n\n**Legitimate exceptions:** An operation already known to be safely idempotent may tolerate repetition. Serializable execution still needs a contention and latency budget.\n\n**Verification scenario:** Force a serialization failure and check fresh rereads, bounded attempts, one intended effect, and acceptable tail latency under contention."
+    },
+    {
+      "id": "distributed-leases-and-fencing",
+      "topics": [
+        "distributed",
+        "boundaries",
+        "mutations",
+        "planning",
+        "review"
+      ],
+      "content": "## Enforce lease generations at the protected resource\n\nA paused worker can resume after its lease expires and after a successor starts. Give each ownership generation a monotonically increasing fencing token, carry it with writes, and have the protected resource reject tokens older than one already accepted.\n\n**Apply when:** leases, locks, or leader election authorize work that can outlive a pause or network delay.\n\n**Boundary notes:** checking lease validity before a pause does not prove current authority. A token that the storage service ignores provides no fencing, and a local timestamp is not a generation authority.\n\n**Checks:** token issuer monotonicity, downstream enforcement, failover, delayed old writes, renewal failure, and the scope each token protects.\n\n**Anti-pattern:** Assume a worker remains authorized because it checked a lease before it paused.\n\n**Why it fails:** The worker can resume after a successor acquired ownership and still issue stale writes.\n\n**Bad example (illustrative):** Worker with token 7 resumes after the protected store has accepted token 8; the store blindly applies its write.\n\n**Better example (illustrative):** Issue monotonically increasing ownership generations and have the protected resource atomically reject writes older than its accepted generation.\n\n**Legitimate exceptions:** Fencing protects ordering at the resource; it is not universal instantaneous revocation or duplicate-operation suppression. A single-process owner may not need a distributed lease.\n\n**Verification scenario:** Accept a new-generation write, then deliver a delayed old-generation write. Verify rejection at the actual resource rather than only in the old worker."
+    },
+    {
+      "id": "consistency-ordering-and-coordination",
+      "topics": [
+        "distributed",
+        "data",
+        "planning",
+        "review"
+      ],
+      "content": "## Match ordering guarantees to the invariant\n\nSerializability orders transactions as a serial history. Linearizability also respects real-time completion of individual operations. Causal ordering preserves dependencies while allowing concurrency. A sequence number does not by itself prove that all earlier messages arrived.\n\n**Apply when:** reads, uniqueness, leadership, or replicated updates require a stated consistency guarantee.\n\n**Boundary notes:** the pick-any-two interpretation of network partitions is too coarse for design. Writes in one ordered log do not make arbitrary replica reads linearizable without an authority or read barrier.\n\n**Checks:** operation scope, real-time requirement, dependency tracking, missing-message detection, partition behavior, read barrier, and constrained-key authority.\n\n**Anti-pattern:** Conflate serializable transactions, real-time linearizability and causal ordering, or infer completeness from a sequence number.\n\n**Why it fails:** A system can satisfy one ordering contract while still serving an older read or missing an earlier event required by another contract.\n\n**Bad example (illustrative):** Receive sequence 12 and assume 1 through 11 were applied; call a follower read linearizable because writes use an ordered log.\n\n**Better example (illustrative):** State the operation scope and required guarantee; use the corresponding read barrier, dependency tracking or gap detection supplied by the system.\n\n**Legitimate exceptions:** A product may tolerate stale but causally consistent reads. Stronger coordination is justified by a concrete invariant, not by a blanket consistency preference.\n\n**Verification scenario:** Construct histories that distinguish the required guarantee: real-time read-after-completion, causal dependency and a missing sequence."
+    },
+    {
+      "id": "consensus-versus-atomic-commit",
+      "topics": [
+        "distributed",
+        "data",
+        "planning",
+        "review"
+      ],
+      "content": "## Separate consensus from atomic commit\n\nIn two-phase commit, durable prepare is a promise and a participant cannot unilaterally abort when the coordinator decision is unknown. Consensus establishes a fault-tolerant ordered decision among protocol members using terms and intersecting voting quorums. These solve different scopes.\n\n**Apply when:** coordinating one decision across replicas or committing across heterogeneous participants.\n\n**Boundary notes:** leader election alone does not strengthen every read. Two-phase locking is concurrency control, not two-phase commit. Coordination stores suit small ownership metadata rather than all runtime data.\n\n**Checks:** in-doubt recovery, coordinator durability, locks held while uncertain, live-voter requirement, membership change protocol, election churn, and progress assumptions.\n\n**Anti-pattern:** Treat leader election as a complete transaction or read-consistency protocol, or abort a prepared transaction solely because the decision timed out.\n\n**Why it fails:** Agreement on leadership does not cover arbitrary effects, and a prepared participant may be bound to a commit decision it has not learned yet.\n\n**Bad example (illustrative):** A participant promises to prepare, loses the coordinator connection and unilaterally rolls back while another participant commits.\n\n**Better example (illustrative):** Recover the durable decision under the protocol's in-doubt rules; use consensus for its stated replicated decision scope and atomic commit for its participant scope.\n\n**Legitimate exceptions:** A single database transaction may remove the need for distributed commit. Coordination stores are appropriate for small control metadata rather than bulk runtime data.\n\n**Verification scenario:** Lose the coordinator after prepare and test durable decision recovery; separately test voter loss and membership change under the chosen consensus protocol."
+    },
+    {
+      "id": "batch-replay-and-publication",
+      "topics": [
+        "data",
+        "distributed",
+        "testing",
+        "implementation"
+      ],
+      "content": "## Make batch outputs replayable and deliberately published\n\nImmutable inputs, pure transformations, and separate outputs enable retry, comparison, and rebuild. Stage a complete dataset or index and switch readers deliberately. Prefer data-local joins and account for shuffle cost and hot-key skew.\n\n**Apply when:** rebuilding indexes, analytics, exports, or other bounded derived data.\n\n**Boundary notes:** per-record writes into an online system expose partial jobs and overload it. A distributed job can lose to one machine when the data fits because communication dominates.\n\n**Checks:** deterministic inputs, side effects, restart point, output version, publication step, skew, intermediate durability, comparison, and rollback.\n\n**Anti-pattern:** Expose partially written batch output directly to readers or rerun a supposedly deterministic job with hidden live inputs.\n\n**Why it fails:** Users observe mixed versions, and a retry cannot reproduce or compare the prior result.\n\n**Bad example (illustrative):** Overwrite the live search index row by row while the backfill is still running.\n\n**Better example (illustrative):** Build a versioned output from fixed inputs, validate it, then switch readers deliberately and retain a defined rollback path.\n\n**Legitimate exceptions:** Incremental publication can be correct when readers understand its consistency contract. Distributed execution is unnecessary when one machine meets the workload.\n\n**Verification scenario:** Interrupt and rerun the job; compare complete outputs and verify readers see the approved version semantics during publication."
+    },
+    {
+      "id": "messaging-queue-versus-replay-log",
+      "topics": [
+        "data",
+        "distributed",
+        "realtime",
+        "planning"
+      ],
+      "content": "## Choose queues and replay logs by consumption semantics\n\nWork queues distribute independent messages and may redeliver or reorder. Retained partition logs support per-key order, replay, and independent consumers, while consumer parallelism is bounded by partitions and one slow record can stall a partition.\n\n**Apply when:** selecting transport for background work or event distribution.\n\n**Boundary notes:** broker acceptance is not business completion. Buffering without a bound moves overload into memory or disk, and retention eventually limits replay.\n\n**Checks:** backpressure or drop policy, durability, acknowledgement boundary, order scope, redelivery, consumer lag versus retention, poison records, and recovery after a gap.\n\n**Anti-pattern:** Acknowledge a message before its business effect is durable, or assume a work queue provides replay and global ordering.\n\n**Why it fails:** A crash can lose work after acknowledgement, while redelivery and partition-local order require explicit consumer semantics.\n\n**Bad example (illustrative):** A worker acknowledges receipt and crashes before recording the completed operation.\n\n**Better example (illustrative):** Align acknowledgement with the durable effect boundary, tolerate redelivery, and choose a retained log only when independent replay or ordered consumption is needed.\n\n**Legitimate exceptions:** Some telemetry intentionally permits loss with a defined policy. That decision does not authorize loss of consequential operations.\n\n**Verification scenario:** Crash before and after effect commit, redeliver a message, delay one partition and exceed retention; verify the documented recovery and loss boundaries."
+    },
+    {
+      "id": "dataflow-source-and-projection-contract",
+      "topics": [
+        "data",
+        "realtime",
+        "cache",
+        "boundaries",
+        "planning"
+      ],
+      "content": "## Derive projections from one committed source\n\nDual writes can diverge through partial failure and reordering. Derive views from one authoritative committed change stream. Bootstrap from a consistent snapshot and precise log position, and retain deletion markers long enough for consumers and compaction.\n\n**Apply when:** maintaining search, cache, analytics, or materialized views beside a primary record.\n\n**Boundary notes:** change-data capture describes mutations, while domain event sourcing records accepted facts; they are not interchangeable. Replay also carries history cost, read-your-writes lag, and deletion obligations.\n\n**Checks:** source authority, snapshot offset, event identity, tombstones, backfill, old/new comparison, deliberate read cutover, gap recovery, and projection rebuild.\n\n**Anti-pattern:** Dual-write the primary record and a derived index independently, assuming retries keep them synchronized.\n\n**Why it fails:** One write can succeed while the other fails, and reordering can make the derived view older than the source.\n\n**Bad example (illustrative):** Commit an order, then separately update search; the second operation times out and its result is unknown.\n\n**Better example (illustrative):** Derive the projection from committed source changes using the existing durable change or outbox contract, with a precise snapshot/log bootstrap boundary.\n\n**Legitimate exceptions:** A truly atomic shared transaction can keep two representations consistent. A small app should not invent a streaming platform when its database already supplies the needed boundary.\n\n**Verification scenario:** Lose the projection update after primary commit, replay it, rebuild from a snapshot and test deletion; compare the recovered view to authoritative data.\n\n**Additional decision constraints:** Separate freshness from integrity. A projection may be temporarily behind while still deriving correct facts; duplicate, contradictory or lost effects are integrity failures. Relaxing an invariant and repairing it later requires an explicit product and money-policy decision. A requested command can fail validation: publish an accepted domain fact only after acceptance, or explicitly model a tentative request followed by its confirmed/rejected outcome."
+    },
+    {
+      "id": "stream-event-time-and-joins",
+      "topics": [
+        "data",
+        "realtime",
+        "distributed",
+        "planning",
+        "review"
+      ],
+      "content": "## Define event time, lateness, and join state\n\nEvent time differs from arrival and processing time. Closing a window is an assumption about lateness, not proof that no more events exist. Choose drop-with-metric, correction, or retraction from product requirements, and define window and join retention explicitly.\n\n**Apply when:** aggregating, joining, or alerting over event streams.\n\n**Boundary notes:** using the current dimension during replay can change historical results. Versioned dimensions preserve event-time meaning at the cost of retention and compaction constraints.\n\n**Checks:** timestamp source and uncertainty, window type, watermark, late-event policy, join key, state eviction, replay determinism, and correction visibility.\n\n**Anti-pattern:** Treat window closure as proof that no earlier event will arrive, or join historical events to today's dimension value during replay.\n\n**Why it fails:** Late events are silently lost and recomputation can change history without an approved correction policy.\n\n**Bad example (illustrative):** Replay last month's transactions using the current exchange-rate dimension.\n\n**Better example (illustrative):** Define event-time semantics, versioned dimension lookup where required, retention and an explicit late-data correction or rejection policy.\n\n**Legitimate exceptions:** Processing-time metrics can intentionally describe arrival behavior. Historical reconstruction and operational monitoring need not use the same time contract.\n\n**Verification scenario:** Inject delayed and out-of-order events, then replay with changed dimension data. Verify deterministic meaning and visible correction behavior."
+    },
+    {
+      "id": "stream-checkpoints-and-effects",
+      "topics": [
+        "data",
+        "realtime",
+        "distributed",
+        "mutations",
+        "implementation",
+        "review"
+      ],
+      "content": "## Checkpoint state with position and bound external effects\n\nRecovery must restore input position and operator state consistently. Framework exactly-once guarantees stop at their transaction boundary; an external effect needs transactional integration or idempotent deduplication with a stable operation identity.\n\n**Apply when:** stream processing maintains state or triggers writes, notifications, or payments.\n\n**Boundary notes:** checkpointing only offsets loses aggregation state. A replay that creates a new operation ID defeats deduplication, and successful processing does not prove an external effect occurred once.\n\n**Checks:** checkpoint atomicity, state backend, replay ID stability, effect commit boundary, deduplication durability, failure injection, and recovery lag.\n\n**Anti-pattern:** Checkpoint only the input position or assume a framework's exactly-once state guarantee includes an unrelated external API.\n\n**Why it fails:** Restored state can disagree with restored position, and replay can repeat an effect beyond the framework's transaction.\n\n**Bad example (illustrative):** Save offset 100 but restore an aggregate from offset 90; resend a payment after recovery with a new request ID.\n\n**Better example (illustrative):** Checkpoint state and position consistently and preserve stable effect identity through a transactional sink or authoritative deduplication boundary.\n\n**Legitimate exceptions:** Pure recomputable projections can use replay instead of per-event durable state. External guarantees must be verified at their actual boundary.\n\n**Verification scenario:** Crash around state/position persistence and around the external commit; verify recovered aggregation and one intended effect."
+    },
+    {
+      "id": "end-to-end-idempotency-and-integrity",
+      "topics": [
+        "distributed",
+        "mutations",
+        "boundaries",
+        "review"
+      ],
+      "content": "## Preserve request identity to the effect boundary\n\nReliable transport or a database transaction does not suppress duplicate client operations. Carry a stable logical request ID through retries and participants, then enforce deduplication where the effect commits. Distinguish the same retry from a genuinely new identical action.\n\n**Apply when:** timeouts or retries can repeat a consequential mutation.\n\n**Boundary notes:** hashing request content merges legitimate repeated actions. Eventual compensation or repair requires a product-approved invariant and visible-state policy, especially for money movement.\n\n**Checks:** ID creation and lifetime, atomic deduplication with the effect, failover, unknown outcomes, retention, downstream propagation, and user-visible retry semantics.\n\n**Anti-pattern:** Generate a new logical request ID on retry, or deduplicate every request having identical content.\n\n**Why it fails:** The first repeats an uncertain effect; the second suppresses legitimate separate actions that happen to look the same.\n\n**Bad example (illustrative):** A timed-out submission is retried with a new ID; two intended identical purchases share a content-derived ID.\n\n**Better example (illustrative):** Keep one operation ID for retries of the same intent, give new intent a new ID, and enforce deduplication atomically with the effect.\n\n**Legitimate exceptions:** An existing SDK or server idempotency guarantee should be reused. The client should not invent a second ledger when it cannot authoritatively confirm settlement.\n\n**Verification scenario:** Retry after a committed-but-lost response and separately submit two genuine identical intents. Verify one effect in the first case and two in the second.\n\n**Additional decision constraints:** Temporary staleness does not authorize duplicate or contradictory effects. If integrity constraints are deliberately relaxed, the visible inconsistency, compensation and recovery contract must be approved explicitly. Single-use approvals also need authorization scope and atomic consumption/claim semantics, not just a random request identifier."
+    },
+    {
+      "id": "operations-audit-and-restore",
+      "topics": [
+        "operations",
+        "testing",
+        "data",
+        "review"
+      ],
+      "content": "## Verify recovery and derived state with executable audits\n\nRestore backups and read the restored data, replay histories, and compare invariants or independently derived views. Make discrepancy detection, ownership, and repair observable. Append-only history helps investigation but does not create correctness by itself.\n\n**Apply when:** durable records, projections, or migrations need recovery evidence.\n\n**Boundary notes:** checksum equality alone may miss a violated domain invariant, and two implementations fed by the same flawed assumption are not independent evidence.\n\n**Checks:** restore frequency, invariant queries, replay boundary, discrepancy threshold, repair path, audit retention, accountable owner, and proof from a recent run.\n\n**Anti-pattern:** Call recovery verified because a backup checksum matches or two projections agree with each other.\n\n**Why it fails:** The restored data can violate business invariants, and both projections can share the same faulty assumption.\n\n**Bad example (illustrative):** A backup file passes its checksum, but no service has opened the restored database or checked record relationships.\n\n**Better example (illustrative):** Restore and read the data, run domain invariant queries and compare independently grounded outcomes; assign discrepancies to a concrete repair owner.\n\n**Legitimate exceptions:** Checksums remain useful for byte integrity. They simply prove a narrower property than functional or domain correctness.\n\n**Verification scenario:** Run a recent restore with representative data and deliberately corrupted or inconsistent fixtures; verify detection and the approved repair path."
+    },
+    {
+      "id": "data-privacy-purpose-and-retention",
+      "topics": [
+        "storage",
+        "data",
+        "boundaries",
+        "planning",
+        "review"
+      ],
+      "content": "## Define purpose, subjects, retention, and accountability\n\nFor collected data, state the purpose, every affected subject including indirectly exposed people, access, retention, and deletion across logs, projections, and backups. Explain use clearly and preserve meaningful control, correction, or appeal where decisions affect people.\n\n**Apply when:** collecting behavioral, identity, relationship, or high-impact decision data.\n\n**Boundary notes:** retaining history forever because replay is useful ignores deletion duties. Privacy is control of disclosure and use, not only secrecy or a consent checkbox.\n\n**Checks:** minimization, purpose compatibility, access review, retention enforcement, derived copies, backup deletion limits, bias and error review, accountable owner, and correction path.\n\n**Anti-pattern:** Retain every event forever because it may help future analytics, or treat one consent flag as the complete privacy contract.\n\n**Why it fails:** Logs, projections and backups can preserve data beyond its allowed purpose and expose people who never directly supplied it.\n\n**Bad example (illustrative):** Delete a primary profile while leaving identifiable event payloads in searchable projections indefinitely.\n\n**Better example (illustrative):** Map purposes, affected subjects, access and retention across primary and derived copies; implement the approved deletion and correction lifecycle.\n\n**Legitimate exceptions:** An authorized retention obligation can limit immediate deletion from some stores. Record that constraint and control access rather than promising impossible erasure.\n\n**Verification scenario:** Exercise a deletion or correction across actual copies and backups, verifying documented limits and accountable handling of failures."
+    },
+    {
+      "id": "state-location-and-provider-contracts",
+      "topics": [
+        "state",
+        "providers",
+        "boundaries"
+      ],
+      "content": "## Choose state ownership from authority and lifetime\n\n**Apply when:** selecting a store, provider, query owner or reset boundary.\n\n| Value | Default owner |\n|---|---|\n| Authoritative remote data | Existing server/query cache |\n| Cross-cutting mutable client state | Explicit shared client owner |\n| Mutable state shared inside one subtree | Narrow subtree owner/provider |\n| Read-only dependency or configuration | Explicit injection/provider |\n| Durable preference | Validated versioned storage boundary |\n| Local interaction state | Local component or hook |\n| Derived value | Computation from its authoritative inputs |\n\n**Anti-pattern:** Copy remote query data into a global store merely because several components need it. Add providers according to convenience rather than dependency order.\n\n**Why it fails:** Competing writers and reset lifetimes appear, while a fast-changing value can rerender unrelated consumers.\n\n**Bad example (illustrative):** A screen effect mirrors the server list into a global store, and a child provider reads an authentication provider mounted below it.\n\n**Better example (illustrative):** Consumers read the existing query owner; a subtree provider holds only shared local selection and is mounted beneath its required dependencies.\n\n**Legitimate exceptions:** An editable snapshot or a server-state owner supplied by an existing SDK may have a different approved contract. Providers can compose existing data hooks, but must not create an unreviewed second fetch/cache authority.\n\n**Verification scenario:** Draw provider dependencies and reset events, test a consumer outside its required provider, and switch account/scope. Required provider hooks fail clearly when the dependency is absent; optional providers expose an explicit optional contract."
+    },
+    {
+      "id": "authorization-single-use-intents",
+      "topics": [
+        "authorization",
+        "mutations",
+        "boundaries",
+        "distributed"
+      ],
+      "content": "## Correlate messages and consume approval safely\n\n**Apply when:** an untrusted message or queued user confirmation crosses a process or UI lifecycle boundary and authorizes an effect.\n\n**Anti-pattern:** Treat payload shape or a random ID as authorization, or read an approved action and delete it in a separate step to claim replay prevention.\n\n**Why it fails:** A response can reach the wrong pending caller, two consumers can both read before deletion, and a crash can lose or duplicate the effect.\n\n**Bad example (illustrative):** read(actionId); delete(actionId); execute(action). Two windows can both finish the read before either deletes.\n\n**Better example (illustrative):** Validate sender/origin/session and payload scope, correlate the response with its pending request, and atomically claim or deduplicate the approved operation at the durable boundary. Bind approval to the subject and intended effect, with its approved expiry and one terminal outcome.\n\n**Legitimate exceptions:** Reuse an existing authoritative SDK/server guarantee. Atomic claim alone does not prove exactly-once execution across a separate external effect. Preserve the same durable operation identity for recovery; an expired lease or missing callback is not authorization to repeat an unknown effect.\n\n**Verification scenario:** Open two consumers concurrently, swap response IDs, change the approved payload, replay an expired approval and crash around effect commit. Verify one authorized intent, correct caller correlation and explicit duplicate, missing, stale and unknown-outcome handling."
+    },
+    {
+      "id": "lifecycle-readiness-and-user-feedback",
+      "topics": [
+        "state",
+        "storage",
+        "mutations",
+        "lifecycle"
+      ],
+      "content": "## Finish initialization explicitly and preserve user intent\n\n**Apply when:** storage hydration, initialization or a readiness condition controls an action or useful UI.\n\n**Anti-pattern:** Return early on missing or invalid data without completing initialization, or silently drop a click because a guard is not ready.\n\n**Why it fails:** Loading never ends or the interaction appears broken with no explanation or recovery route.\n\n**Bad example (illustrative):** if (error || !savedState) return; setHydrated(true). A submit handler similarly returns without feedback.\n\n**Better example (illustrative):** Complete each initialization path as valid, approved fallback, recoverable error or blocked. Reflect action readiness through the approved disabled reason or visible feedback.\n\n**Legitimate exceptions:** Completion is not authorization or data validity. Required permissions and safety data fail closed; an elapsed timeout must not grant access or fabricate a balance. Optional preferences may use approved defaults. Do not erase unsent work just to clear loading.\n\n**Verification scenario:** Exercise valid, missing, corrupt and inaccessible storage, plus a click before readiness. Every completed attempt has a truthful state and the approved recovery behavior; equivalent branches are checked together."
+    },
+    {
+      "id": "realtime-subscription-lifecycle",
+      "topics": [
+        "realtime",
+        "cache",
+        "performance",
+        "lifecycle"
+      ],
+      "content": "## Own live subscriptions and their recovery backstop\n\n**Apply when:** multiple consumers share the same live scope, updates exceed useful rendering frequency, or a live connection can leave a view stale.\n\n**Anti-pattern:** Open one identical network stream per leaf, keep it after the last subscriber leaves, or let only one operation variant recover when live events are lost.\n\n**Why it fails:** Connections and cache work multiply, obsolete sessions survive, and equivalent user actions receive inconsistent final state.\n\n**Bad example (illustrative):** Each row opens the same account stream; unmount forgets cleanup; only one completion branch invalidates the authoritative query.\n\n**Better example (illustrative):** Use the existing scoped shared subscription owner when available. Reference-count identical shared streams and tear down at the last subscriber. Coalesce proven redundant presentation updates at a measured boundary and define authoritative snapshot/query recovery for every applicable terminal branch.\n\n**Legitimate exceptions:** One consumer may need only a local subscription. Do not add batching or reference counting where an SDK already owns it. Coalescing must preserve noncommutative events, deletions and required intermediate transitions; it is not permission to drop raw business effects. Recovery cadence follows the accepted freshness contract.\n\n**Verification scenario:** Mount two subscribers, remove one then both, reconnect with an old buffered generation and suppress a terminal event. Verify subscription count, teardown, snapshot precedence, bounded render/cache work and symmetric recovery."
+    },
+    {
+      "id": "react-external-store-snapshots",
+      "topics": [
+        "effects",
+        "state",
+        "subscriptions",
+        "lifecycle"
+      ],
+      "content": "## Connect external stores through a snapshot contract\n\n**Apply when:** React renders state owned outside React and must remain coherent across subscription timing or server hydration.\n\n**Anti-pattern:** Return a fresh snapshot object on every read, mutate the rendered snapshot in place, or wire an ad hoc effect that can miss an update between render and subscription.\n\n**Why it fails:** Unchanged data appears changed, real changes may be invisible, or different consumers render inconsistent versions.\n\n**Bad example (illustrative):** getSnapshot returns a new wrapper object even when the store has not changed.\n\n**Better example (illustrative):** Provide an immutable snapshot with stable identity until data changes, a subscribe function with cleanup, and a matching server/hydration snapshot when applicable. Use the runtime-supported external-store primitive or the established library adapter.\n\n**Legitimate exceptions:** Ordinary local React state needs no external store. A browser-only source may deliberately render on the client. This contract does not require a new global store.\n\n**Verification scenario:** Read unchanged data twice, publish an update during subscription setup, unsubscribe and hydrate from a server snapshot. Check identity stability, notification, cleanup and initial consistency."
+    },
+    {
+      "id": "practice-evidence-led-adoption",
+      "topics": [
+        "learning",
+        "adoption"
+      ],
+      "content": "## Learn a pattern by proving its effect\n\n**Apply when:** introducing unfamiliar engineering guidance or deciding whether to promote a practice across a project.\n\n**Anti-pattern:** Treat reading a guide or repeating its terminology as evidence that an engineer or agent can apply it.\n\n**Why it fails:** The learner may recognize the label but miss the triggering problem, a valid exception or the observable regression.\n\n**Bad example (illustrative):** Mark a pattern mastered because the learner can recite its definition.\n\n**Better example (illustrative):** Implement a bounded example, review a planted defect and a valid alternative, explain the failure before and after, and preserve the resulting artifacts and checks.\n\n**Legitimate exceptions:** Not every lesson needs a production migration. Use isolated exercises and then one proven real surface before broad adoption; do not create changes solely to exercise a fashionable pattern.\n\n**Verification scenario:** Present a structurally similar but different task without the expected answer. Evaluate behavior, reasoning and false positives rather than vocabulary or rule-file length."
+    }
+  ]
+}

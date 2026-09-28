@@ -21,6 +21,13 @@
 - Current CI / required human reviews:
 - Destination merge authority / confirmed remote result:
 
+## Resource checkpoint
+
+- Actual model and effort by role, including fixture authoring:
+- Contracted local journeys passed before independent release review:
+- Available run count, elapsed time and reported token metrics:
+- Last no-progress classification and bounded next action:
+
 ## Resume
 
 - Existing owner sessions, workers or scheduled follow-ups to reconcile:

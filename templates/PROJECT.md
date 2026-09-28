@@ -14,10 +14,13 @@ Fill this file from the destination's existing instructions and approved decisio
 ## Client and models
 
 - Selected native client:
-- Planning model and effort: use the strongest configured planning model. For Codex, the requested default is Astra high when available; preserve a current explicit override.
+- Manager model and effort for routine coordination:
+- Planning and architecture challenge model and effort: use the configured route for the decision's scope and risk; preserve explicit user overrides rather than defaulting every task to the strongest model.
 - Implementation model and effort:
+- Fixture authoring and repair model and effort: follow the implementation route, separately from independent judgment.
 - Independent review and QA models and effort:
 - Native parallel-agent capability and practical concurrency:
+- Per-slice resource budget, usage reporting capability and checkpoint cadence:
 - If a requested model or capability is unavailable: report it; do not silently change provider or billing.
 
 ## Repository contracts

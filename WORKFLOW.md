@@ -24,6 +24,8 @@ The project manager chooses the simplest useful delegation: direct bounded subag
 
 Each delegate receives a bounded packet: outcome, owned files/worktree, interfaces and dependencies, selected card IDs and full relevant content, applicability rationale, resolved exceptions, required tests and completion criteria. Include plan and note links. Do not load the entire library into every worker.
 
+Verify the actual model and effort before dispatch. Fixture authoring and repair use the configured implementation route; a reviewer's higher effort must not silently become the authoring setting. An existing worker retains its model settings, so a role change needs the correct route or a new bounded worker. Keep manager handoffs compact and start a fresh context at a verified milestone instead of carrying an implementation diary indefinitely.
+
 Stay with active execution using native completion signals and bounded waits. Resolve actionable technical blockers and integrate returned work instead of ending the manager turn merely because delegation succeeded. When work must stop for a decision, access limit or unsupported background capability, save the checkpoint and report that stop explicitly.
 
 Keep one writer per worktree. Coordinate across initiatives through their notes, recorded owners and existing worktrees, without a shared database. Parallelize independent slices; serialize overlapping ownership and integration. Configure capacity around actual host resources, not an arbitrary universal limit. Avoid repeating dependency setup or heavy builds unnecessarily. Preserve unrelated work.
@@ -32,7 +34,13 @@ Independently releasable slices can ship separately. Coupled slices need a combi
 
 ## Review, QA and delivery
 
+The implementation owner first completes deterministic fixture setup, narrow checks and the contracted local journeys. Install shared recorders and clocks, validate transport response shapes, and capture all error, write and signing observations before assertions. Retain failed traces for inert local fixtures even when retries are disabled; preserve separate secret-handling rules for live authenticated QA. Diagnose retained evidence before another build, without weakening assertions or fabricating empty responses.
+
+Freeze the candidate and obtain the repository's required exact-head CI evidence before starting independent release audit or QA judgment. If CI is unavailable, record the missing evidence and follow the repository's exception policy rather than buying a judgment that cannot establish readiness. Do not send a failing fixture to successive fresh reviewers for diagnosis. A QA lane that changes tests has changed the head: the owner reproduces the result locally and supplies the required new-head evidence.
+
 A fresh reviewer who did not implement the candidate examines changed code and affected consumers, with the same applicable card content and accepted exceptions. Review correctness, architecture, authorization, mutation safety, useful tests and unnecessary complexity. Classify findings as main-path, money or deferred. Verify claims before changing code. Review repair deltas; re-review integrated changes where necessary. After two unproductive repair rounds, report the concrete blocker instead of looping.
+
+After two no-progress QA or review rounds, classify the blocker as product behavior, test defect, infrastructure or missing evidence and choose a bounded next action. Do not expand passing contracted journeys cosmetically. Reuse review evidence for identical code only where repository policy permits it; a changed base still needs the required fresh review. Record model, effort, elapsed time and reported tokens beside existing evidence when available. Missing usage is unknown, not zero; cached input and raw token totals are not account allowance percentages.
 
 Run the repository's required checks on the actual candidate. A separate QA context verifies applicable accepted journeys, including loading, empty and error states. Changed authenticated UI needs real non-production authentication and authoritative outcome assertions. Test writes require dedicated identities/data and the correct non-production destination. Blockchain mutation tests use testnet. Report missing access and skipped coverage honestly; never substitute an authentication bypass for authenticated QA.
 

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { mkdirSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 import { z } from "zod";
@@ -511,3 +512,22 @@ test("generated pull requests satisfy lowercase-subject policies", async (contex
   });
   assert.equal(fixture.store.findByIssue(fixture.issue.id)?.state, "completed");
 });
+
+for (const kind of ["behavior", "conformance"] as const) {
+  test(`rejects shared ${kind} before launching any role`, async (context) => {
+    const fixture = createControllerFixture();
+    context.after(fixture.cleanup);
+    const shared = join(fixture.config.stateDirectory, "shared-proof-cache");
+    mkdirSync(shared, { recursive: true });
+    symlinkSync(shared, join(fixture.config.stateDirectory, kind));
+    await assert.rejects(
+      fixture.controller.run({
+        profile: "codex",
+        issueId: fixture.issue.id,
+        projectId: "project",
+      }),
+      /workspace-local/,
+    );
+    assert.equal(fixture.runtimeCalls.length, 0);
+  });
+}

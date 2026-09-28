@@ -98,6 +98,9 @@ node dist/cli.js install --config /absolute/private/workspace.json
 
 Conformance and evaluation make bounded native model calls and consume your provider quota. Their private receipts bind the release, models and runtime executable. Conformance additionally binds the host. Behavior evaluation does not enforce a host ID; it requires matching release/runtime inputs and intact raw evidence. Do not copy someone else's receipts to claim this machine passed. `doctor` without `--live` does not verify remote identity.
 
+Keep `stateDirectory/behavior` and `stateDirectory/conformance` as real, private directories for each workspace. The controller rejects linked directories and linked profile receipts before dispatch or proof generation. Never point them at a shared mutable evaluation cache. To migrate an existing setup, pause and drain the workspace first, then copy the complete proof directory and all referenced artifacts into independent files. Do not copy only the profile JSON. Validate the copy against the destination's actual configured runtime and role policy before resuming; if incompatible, regenerate locally with `evaluate` or `conform`. A complete compatible copy preserves evidence, but does not grant permission to reuse another organization's private data.
+
+
 Installation writes a manifest-owned command, namespaced skills/rules and an inactive launch agent. It preserves unrelated instructions and does not edit shell startup files. Add the returned command directory to your PATH yourself or use the returned absolute command path.
 
 The included source-use receipt records owner authorization for this derived release. It is not an employer's approval to send application code to an AI provider, nor a new license to redistribute underlying books or documents. Source changes require a new review and release.

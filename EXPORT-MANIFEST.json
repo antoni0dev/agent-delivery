@@ -40,8 +40,8 @@
     },
     {
       "path": "dist/cli.js",
-      "digest": "f11be285f83b203127a0a05ef5a12ae84ea4215df1c8449a54bff3f9c7ce6f46",
-      "size": 22561
+      "digest": "48e80e9c3bc3e0b70017aa4922fbcba909e66b63f809e5a1b9b39c22b59f76d5",
+      "size": 22836
     },
     {
       "path": "dist/commands.d.ts",
@@ -80,8 +80,8 @@
     },
     {
       "path": "dist/controller.js",
-      "digest": "0bc6e5fe0f4f33c01a1170a9eea519be68cd38ddc99c1e282cc0420262300596",
-      "size": 87347
+      "digest": "2602b931667883ac756cf71f3a04ddc35eb9f45bd3b9e87f834a196e6ad09941",
+      "size": 88570
     },
     {
       "path": "dist/distribution/export.d.ts",
@@ -162,6 +162,16 @@
       "path": "dist/git.js",
       "digest": "d7cc796de31a5ebe445c6863777027933c85b23eeeab233bca678ed6a73188a3",
       "size": 9239
+    },
+    {
+      "path": "dist/host/evidence-directory.d.ts",
+      "digest": "fd57400d69aaa163c879be996acdf9a8ff20c5e594df737785baf0506197be8a",
+      "size": 354
+    },
+    {
+      "path": "dist/host/evidence-directory.js",
+      "digest": "aba0abde6d832e8897aac434e4f0e81940625da7642147e8c127f226c4e79854",
+      "size": 1626
     },
     {
       "path": "dist/host/execution-lock.d.ts",
@@ -435,8 +445,8 @@
     },
     {
       "path": "docs/adapting-a-repository.md",
-      "digest": "67d3f0dc7b5bfc44667c9b1b0d1d5fd331c2f2be18a7bd8596f9ac75e1e01748",
-      "size": 12345
+      "digest": "ccfe598fbd58c6220cb500d732b7b6b28e886faa0190a6729ef3fab499434681",
+      "size": 13108
     },
     {
       "path": "docs/architecture.md",
@@ -595,8 +605,8 @@
     },
     {
       "path": "src/cli.ts",
-      "digest": "076dc1dff11980fa3bffcafa023f1ba89ddb5342deb25fe4ef2154f90bdbf97a",
-      "size": 20777
+      "digest": "a5f3902cf3bea4c969088641a4978053da3a225aa260acbe701538071cf2d64d",
+      "size": 21014
     },
     {
       "path": "src/commands.ts",
@@ -615,8 +625,8 @@
     },
     {
       "path": "src/controller.ts",
-      "digest": "cea35c17cec389d409e4cbef13dc7004a66c593b060133e5c1e3fd1e640da8ae",
-      "size": 83053
+      "digest": "c4a59a85aa8470f1eecaf5dd2d313c7e955cc033c890e2515f25fd4021cf3196",
+      "size": 84002
     },
     {
       "path": "src/distribution/export.ts",
@@ -657,6 +667,11 @@
       "path": "src/git.ts",
       "digest": "611019412649e49579f437488f911d4f0f84bd29cea2f83276e867c7dc6a256b",
       "size": 9661
+    },
+    {
+      "path": "src/host/evidence-directory.ts",
+      "digest": "6b7f2623bd358cc9e1a419d2d9cc17ad06518a48abcc3e94a0ebc54d880d89e1",
+      "size": 1784
     },
     {
       "path": "src/host/execution-lock.ts",
@@ -825,13 +840,18 @@
     },
     {
       "path": "test/controller.test.ts",
-      "digest": "f4e080347e6779f597b3dea83f4694e5cd0e4c61b7599052c624d35ede433772",
-      "size": 17729
+      "digest": "84b6849bc6d6fcabc5c4ba0ca3838cc5a39cc1fbae19975873d42bba559ca427",
+      "size": 18440
     },
     {
       "path": "test/distribution.test.ts",
       "digest": "c65e41e9ad09fa13c0a087bf67acc1cb108e3b7933080711e34e240b60e139ca",
       "size": 15866
+    },
+    {
+      "path": "test/evidence-directory.test.ts",
+      "digest": "87780e96a46bf2423dd42eb563c7d2db600535218394f731eea97ff320405291",
+      "size": 4171
     },
     {
       "path": "test/git-authorization.test.ts",
@@ -919,5 +939,5 @@
       "size": 385
     }
   ],
-  "manifestDigest": "c1c96975a1c5eda294dedf59e3bdea9942db30eef10fb13ac37a7af079574f9f"
+  "manifestDigest": "a5f40c5dcbfee771e6cfb78f98eddb3dab24953f5eb46e2bcea535b77a75e3ca"
 }

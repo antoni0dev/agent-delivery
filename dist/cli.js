@@ -10,6 +10,7 @@ import { Controller } from "./controller.js";
 import { createPortableExport, currentManagedInstallation, defaultManagedRoot, installManagedDistribution, installNodeDependencies, upgradeManagedDistribution, } from "./distribution/index.js";
 import { managerContract } from "./distribution/manager-contract.js";
 import { DeliveryError, profiles } from "./domain.js";
+import { evidenceDirectory } from "./host/evidence-directory.js";
 import { activateLaunchAgent, activateWithScheduler, deactivateLaunchAgent, loadHostId, writeLaunchAgent, } from "./host/index.js";
 import { locateWorkspace, registerWorkspace } from "./host/workspace-registry.js";
 import { runBehaviorEvaluation } from "./knowledge/model-evaluation.js";
@@ -172,7 +173,12 @@ const commands = {
             configPath: resolve(required(values.config, "config")),
             run: ({ config }) => runBehaviorEvaluation({
                 root: config.knowledgeRoot,
-                directory: join(config.stateDirectory, "behavior"),
+                directory: evidenceDirectory({
+                    stateDirectory: config.stateDirectory,
+                    kind: "behavior",
+                    profile: requiredProfile(parseProfile(values.profile)),
+                    access: "write",
+                }),
                 executable: config.runtimes[requiredProfile(parseProfile(values.profile))],
                 nodeExecutable: process.execPath,
                 profile: requiredProfile(parseProfile(values.profile)),

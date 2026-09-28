@@ -7,6 +7,7 @@ import { configDigest, credentialValue, environmentDigest, readProjectInstructio
 import { readConformance, runConformance } from "./conformance.js";
 import { bindingSchema, DeliveryError, ensurePresent, hasBlockingFindings, issueSchema, parseStructuredOutput, planSchema, reviewSchema, } from "./domain.js";
 import * as gitServices from "./git.js";
+import { evidenceDirectory } from "./host/evidence-directory.js";
 import { acquireExecutionLock } from "./host/execution-lock.js";
 import { notifyDesktop } from "./host/notification.js";
 import { createGithubAdapter, createLinearAdapter } from "./integrations/index.js";
@@ -218,11 +219,16 @@ export class Controller {
         const knowledge = this.services.knowledge.load({ root: this.input.config.knowledgeRoot });
         if (!knowledge.complete)
             throw new DeliveryError("The active knowledge release lacks source coverage approval");
+        const behaviorDirectory = evidenceDirectory({
+            stateDirectory: this.input.config.stateDirectory,
+            kind: "behavior",
+            profile: task.profile,
+        });
         try {
             await this.services.behavior({
                 currentRoot: this.input.config.knowledgeRoot,
                 executable: this.input.config.runtimes[task.profile],
-                directory: join(this.input.config.stateDirectory, "behavior"),
+                directory: behaviorDirectory,
                 profile: task.profile,
                 knowledgeDigest: knowledge.digest,
             });
@@ -231,7 +237,11 @@ export class Controller {
             throw new DeliveryError("The selected runtime knowledge evaluation is missing, failed or stale", "capability");
         }
         await this.services.conformance({
-            directory: join(this.input.config.stateDirectory, "conformance"),
+            directory: evidenceDirectory({
+                stateDirectory: this.input.config.stateDirectory,
+                kind: "conformance",
+                profile: task.profile,
+            }),
             profile: task.profile,
             executable: this.input.config.runtimes[task.profile],
             hostId: this.input.hostId,
@@ -399,7 +409,12 @@ export class Controller {
         return runConformance({
             profile,
             executable: this.input.config.runtimes[profile],
-            directory: join(this.input.config.stateDirectory, "conformance"),
+            directory: evidenceDirectory({
+                stateDirectory: this.input.config.stateDirectory,
+                kind: "conformance",
+                profile,
+                access: "write",
+            }),
             hostId: this.input.hostId,
             ...this.runtimeCredential(profile),
         });
@@ -414,13 +429,21 @@ export class Controller {
         this.services.knowledgeEligibility({ root: config.knowledgeRoot });
         await this.services.behavior({
             currentRoot: this.input.config.knowledgeRoot,
-            directory: join(config.stateDirectory, "behavior"),
+            directory: evidenceDirectory({
+                stateDirectory: config.stateDirectory,
+                kind: "behavior",
+                profile: config.intakeRuntimeProfile,
+            }),
             executable: config.runtimes[config.intakeRuntimeProfile],
             profile: config.intakeRuntimeProfile,
             knowledgeDigest: this.services.knowledge.load({ root: config.knowledgeRoot }).digest,
         });
         const proof = await this.services.conformance({
-            directory: join(config.stateDirectory, "conformance"),
+            directory: evidenceDirectory({
+                stateDirectory: config.stateDirectory,
+                kind: "conformance",
+                profile: config.intakeRuntimeProfile,
+            }),
             profile: config.intakeRuntimeProfile,
             executable: config.runtimes[config.intakeRuntimeProfile],
             hostId: this.input.hostId,
@@ -544,14 +567,22 @@ export class Controller {
     async handoff({ id, newOwner, profile, }) {
         const task = this.input.store.get(id);
         await this.services.conformance({
-            directory: join(this.input.config.stateDirectory, "conformance"),
+            directory: evidenceDirectory({
+                stateDirectory: this.input.config.stateDirectory,
+                kind: "conformance",
+                profile,
+            }),
             profile,
             executable: this.input.config.runtimes[profile],
             hostId: this.input.hostId,
         });
         await this.services.behavior({
             currentRoot: this.input.config.knowledgeRoot,
-            directory: join(this.input.config.stateDirectory, "behavior"),
+            directory: evidenceDirectory({
+                stateDirectory: this.input.config.stateDirectory,
+                kind: "behavior",
+                profile,
+            }),
             executable: this.input.config.runtimes[profile],
             profile,
             knowledgeDigest: this.services.knowledge.load({ root: this.input.config.knowledgeRoot })
@@ -619,14 +650,22 @@ export class Controller {
         const project = ensurePresent(this.input.config.projects.find((project) => project.id === projectId), "Unknown configured project");
         const selected = profile;
         await this.services.conformance({
-            directory: join(this.input.config.stateDirectory, "conformance"),
+            directory: evidenceDirectory({
+                stateDirectory: this.input.config.stateDirectory,
+                kind: "conformance",
+                profile: selected,
+            }),
             profile: selected,
             executable: this.input.config.runtimes[selected],
             hostId: this.input.hostId,
         });
         await this.services.behavior({
             currentRoot: this.input.config.knowledgeRoot,
-            directory: join(this.input.config.stateDirectory, "behavior"),
+            directory: evidenceDirectory({
+                stateDirectory: this.input.config.stateDirectory,
+                kind: "behavior",
+                profile: selected,
+            }),
             executable: this.input.config.runtimes[selected],
             profile: selected,
             knowledgeDigest: this.services.knowledge.load({ root: this.input.config.knowledgeRoot })

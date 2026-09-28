@@ -27,6 +27,7 @@ import {
 } from "./distribution/index.js";
 import { managerContract } from "./distribution/manager-contract.js";
 import { DeliveryError, type Profile, profiles } from "./domain.js";
+import { evidenceDirectory } from "./host/evidence-directory.js";
 import {
   activateLaunchAgent,
   activateWithScheduler,
@@ -251,7 +252,12 @@ const commands: Readonly<Record<string, (args: string[]) => Promise<unknown>>> =
       run: ({ config }) =>
         runBehaviorEvaluation({
           root: config.knowledgeRoot,
-          directory: join(config.stateDirectory, "behavior"),
+          directory: evidenceDirectory({
+            stateDirectory: config.stateDirectory,
+            kind: "behavior",
+            profile: requiredProfile(parseProfile(values.profile)),
+            access: "write",
+          }),
           executable: config.runtimes[requiredProfile(parseProfile(values.profile))],
           nodeExecutable: process.execPath,
           profile: requiredProfile(parseProfile(values.profile)),

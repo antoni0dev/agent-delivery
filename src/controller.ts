@@ -1812,7 +1812,7 @@ export class Controller {
         );
     }
     const acceptedBinding = bindingSchema.parse(value.binding);
-    if (acceptedBinding.base !== binding.base) {
+    if (project.release.strictCurrentBase && acceptedBinding.base !== binding.base) {
       await github.markDraft({ number, head: acceptedBinding.head });
       this.services.git.updateBase({
         authorization: await github.gitAuthorization(),
@@ -1827,7 +1827,10 @@ export class Controller {
     const ready = this.input.store.readiness({
       initiativeId: task.id,
       requirements: plan.requirements,
-      binding,
+      // Head evidence retains its tested base; GitHub checks the current merge target below.
+      binding: project.release.strictCurrentBase
+        ? binding
+        : { ...binding, base: acceptedBinding.base },
       maxAgeMs: this.input.config.liveEvidenceMaxAgeMs,
     });
     if (!ready.passed) throw new DeliveryError(ready.failures.join("; "));
@@ -1869,10 +1872,16 @@ export class Controller {
       return;
     }
     await this.assertAdmission(task);
+    this.input.store.event({
+      initiativeId: task.id,
+      kind: "merge-target-checked",
+      detail: { head: binding.head, reviewedBase: recordedBinding.base, targetBase: binding.base },
+    });
     const confirmed = await reconcileOperation({
       store: this.input.store,
       key: operationKey,
-      payload: { initiativeId: task.id, head: binding.head, base: binding.base },
+      // The intent identifies the reviewed head; the live target is checked on every dispatch.
+      payload: { initiativeId: task.id, head: binding.head, base: recordedBinding.base },
       dispatch: () => this.input.store.dispatchMerge({ key: operationKey, initiativeId: task.id }),
       lookup: async () => {
         const pull = await github.readPullRequest(number);

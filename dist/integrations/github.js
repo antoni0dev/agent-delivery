@@ -331,7 +331,7 @@ export function createGithubAdapter(input) {
         const requiredReviews = Math.max(protection?.required_pull_request_reviews?.required_approving_review_count ?? 0, ...reviewRules.map(({ parameters }) => parameters?.required_approving_review_count ?? 0));
         return {
             checks: [...byIdentity.values()],
-            strict: strictValues.length > 0 && strictValues.every(Boolean),
+            strict: strictValues.some(Boolean),
             requiredReviews,
             mergeQueue: rules.some(({ type }) => type === "merge_queue"),
         };
@@ -481,11 +481,17 @@ export function createGithubAdapter(input) {
         if (branch.commit.sha !== args.base)
             failures.push("base branch changed");
         const policy = await policies(pull.baseBranch);
-        if (!policy.strict)
+        const strictPolicyMissing = input.project.release.strictCurrentBase && !policy.strict;
+        if (strictPolicyMissing)
             failures.push("required status checks are not strict");
         if (pull.draft)
             failures.push("pull request is still a draft");
-        if (rawPull.mergeable !== true || rawPull.mergeable_state !== "clean")
+        const mergeabilityAllowed = rawPull.mergeable === true &&
+            (rawPull.mergeable_state === "clean" ||
+                (rawPull.mergeable_state === "behind" &&
+                    !input.project.release.strictCurrentBase &&
+                    !policy.strict));
+        if (!mergeabilityAllowed)
             failures.push("pull request is not mergeable");
         const reviews = await reviewsForPull(args.number);
         const latestReview = new Map();
@@ -541,7 +547,7 @@ export function createGithubAdapter(input) {
         const scopeChanged = pull.head !== args.head || pull.base !== args.base || branch.commit.sha !== args.base;
         const mergeabilityBlocksReview = reviewsMissing && rawPull.mergeable === true && rawPull.mergeable_state === "blocked";
         let nextAction;
-        if (!policy.strict || policy.mergeQueue)
+        if (strictPolicyMissing || policy.mergeQueue)
             nextAction = "blocked-policy";
         else if (terminalCheckFailure)
             nextAction = "repair";
@@ -550,7 +556,7 @@ export function createGithubAdapter(input) {
         else if (reviewsMissing &&
             !scopeChanged &&
             !pull.draft &&
-            (rawPull.mergeable_state === "clean" || mergeabilityBlocksReview))
+            (mergeabilityAllowed || mergeabilityBlocksReview))
             nextAction = "human-review";
         const result = {
             passed: failures.length === 0,

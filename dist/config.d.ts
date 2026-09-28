@@ -45,7 +45,7 @@ declare const projectSchema: z.ZodObject<{
             squash: "squash";
         }>;
         deploysProduction: z.ZodLiteral<false>;
-        strictCurrentBase: z.ZodLiteral<true>;
+        strictCurrentBase: z.ZodBoolean;
         requiredChecks: z.ZodArray<z.ZodString>;
     }, z.core.$strict>;
 }, z.core.$strict>;
@@ -174,7 +174,7 @@ export declare const workspaceConfigSchema: z.ZodObject<{
                 squash: "squash";
             }>;
             deploysProduction: z.ZodLiteral<false>;
-            strictCurrentBase: z.ZodLiteral<true>;
+            strictCurrentBase: z.ZodBoolean;
             requiredChecks: z.ZodArray<z.ZodString>;
         }, z.core.$strict>;
     }, z.core.$strict>>;

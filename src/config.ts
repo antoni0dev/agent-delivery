@@ -35,7 +35,7 @@ const projectSchema = z
         targetBranch: z.string().min(1),
         method: z.enum(["squash", "merge", "rebase"]),
         deploysProduction: z.literal(false),
-        strictCurrentBase: z.literal(true),
+        strictCurrentBase: z.boolean(),
         requiredChecks: z.array(z.string()).min(1),
       })
       .strict(),
@@ -283,7 +283,7 @@ export function configTemplate({
           targetBranch: "main",
           method: "squash",
           deploysProduction: false,
-          strictCurrentBase: true,
+          strictCurrentBase: false,
           requiredChecks: [],
         },
       },

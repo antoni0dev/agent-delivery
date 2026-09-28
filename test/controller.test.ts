@@ -283,6 +283,57 @@ test("a changed base requires branch update and fresh review before merging", as
   assert.equal(fixture.githubCalls.merged[0]?.base, "e".repeat(40));
 });
 
+test("non-strict delivery preserves reviewed-head evidence when only the base advances", async (context) => {
+  const fixture = createControllerFixture({ strictCurrentBase: false });
+  context.after(fixture.cleanup);
+  fixture.setChecksPassed(false);
+  await fixture.controller.run({
+    profile: "codex",
+    issueId: fixture.issue.id,
+    projectId: "project",
+  });
+  const task = fixture.store.findByIssue(fixture.issue.id);
+  assert.ok(task);
+  const before = checkpointBindingSchema.parse(JSON.parse(task.checkpoint)).binding;
+  const calls = fixture.runtimeCalls.length;
+  fixture.setBase("e".repeat(40));
+  fixture.setChecksPassed(true);
+  await fixture.controller.tick();
+  const after = fixture.store.get(task.id);
+  assert.equal(after.state, "completed");
+  assert.equal(fixture.gitCalls.includes("updateBase"), false);
+  assert.equal(fixture.runtimeCalls.length, calls);
+  assert.deepEqual(checkpointBindingSchema.parse(JSON.parse(after.checkpoint)).binding, before);
+  assert.equal(fixture.githubCalls.merged[0]?.base, "e".repeat(40));
+  assert.equal(fixture.githubCalls.merged[0]?.head, before.head);
+});
+
+test("non-strict pending merge intent survives another conflict-free base advance", async (context) => {
+  const fixture = createControllerFixture({ strictCurrentBase: false });
+  context.after(fixture.cleanup);
+  fixture.setChecksPassed(false);
+  await fixture.controller.run({
+    profile: "codex",
+    issueId: fixture.issue.id,
+    projectId: "project",
+  });
+  const task = fixture.store.findByIssue(fixture.issue.id);
+  assert.ok(task);
+  const binding = checkpointBindingSchema.parse(JSON.parse(task.checkpoint)).binding;
+  const key = `${fixture.config.workspaceId}:${task.id}:merge:${binding.head}:${binding.base}`;
+  fixture.store.beginOperation({
+    key,
+    payload: { initiativeId: task.id, head: binding.head, base: binding.base },
+  });
+  fixture.setBase("e".repeat(40));
+  fixture.setChecksPassed(true);
+  await fixture.controller.tick();
+  assert.equal(fixture.store.get(task.id).state, "completed");
+  assert.equal(fixture.store.operation(key)?.status, "confirmed");
+  assert.equal(fixture.githubCalls.merged.length, 1);
+  assert.equal(fixture.githubCalls.merged[0]?.base, "e".repeat(40));
+});
+
 function minimalMergePlan() {
   const base = createPlan();
   return planSchema.parse({

@@ -861,6 +861,7 @@ test("GitHub distinguishes human review and blocked policy actions", async () =>
   assert.match(review.failures[0] ?? "", /pull request is not mergeable/);
   assert.match(review.failures[1] ?? "", /required reviews missing/);
 
+  project.release.strictCurrentBase = true;
   const strict = await createGithubAdapter({
     config,
     project,
@@ -876,6 +877,80 @@ test("GitHub distinguishes human review and blocked policy actions", async () =>
   }).requiredChecks({ number: 7, head: HEAD, base: BASE });
   assert.equal(mergeQueue.nextAction, "blocked-policy");
   assert.equal(mergeQueue.failures.at(-1), "merge queue is not supported");
+});
+
+test("GitHub permits nonstrict clean and conflict-free behind branches", async () => {
+  for (const mergeableState of ["clean", "behind"]) {
+    const { config, project } = fixture();
+    project.release.strictCurrentBase = false;
+    const result = await createGithubAdapter({
+      config,
+      project,
+      fetch: githubChecksFetch({
+        strictPolicy: false,
+        pull: rawPull({ mergeable_state: mergeableState }),
+      }),
+    }).requiredChecks({ number: 7, head: HEAD, base: BASE });
+    assert.equal(result.passed, true, mergeableState);
+    assert.deepEqual(result.failures, []);
+  }
+});
+
+test("GitHub behind branches still respect local and effective remote strict policies", async () => {
+  for (const scenario of [
+    { configuredStrict: true, remoteStrict: false, mixedPolicy: false },
+    { configuredStrict: false, remoteStrict: true, mixedPolicy: false },
+    { configuredStrict: false, remoteStrict: false, mixedPolicy: true },
+  ]) {
+    const { config, project } = fixture();
+    project.release.strictCurrentBase = scenario.configuredStrict;
+    const rules = scenario.mixedPolicy
+      ? [
+          [
+            {
+              type: "required_status_checks",
+              parameters: {
+                strict_required_status_checks_policy: true,
+                required_status_checks: [{ context: "test", integration_id: null }],
+              },
+            },
+          ],
+        ]
+      : undefined;
+    const result = await createGithubAdapter({
+      config,
+      project,
+      fetch: githubChecksFetch({
+        strictPolicy: scenario.remoteStrict,
+        ...(rules ? { rulePages: rules } : {}),
+        pull: rawPull({ mergeable_state: "behind" }),
+      }),
+    }).requiredChecks({ number: 7, head: HEAD, base: BASE });
+    assert.equal(result.passed, false);
+    assert.ok(result.failures.includes("pull request is not mergeable"));
+  }
+});
+
+test("GitHub relaxed freshness preserves conflict, unknown, checks and review gates", async () => {
+  const scenarios = [
+    { pull: rawPull({ mergeable: false, mergeable_state: "dirty" }) },
+    { pull: rawPull({ mergeable: null, mergeable_state: "unknown" }) },
+    { pull: rawPull({ mergeable: true, mergeable_state: "unknown" }) },
+    { pull: rawPull({ mergeable: true, mergeable_state: "blocked" }) },
+    { pull: rawPull({ mergeable_state: "behind" }), conclusion: "failure" },
+    { pull: rawPull({ mergeable_state: "behind" }), requiredReviews: 1 },
+  ];
+  for (const scenario of scenarios) {
+    const { config, project } = fixture();
+    project.release.strictCurrentBase = false;
+    const result = await createGithubAdapter({
+      config,
+      project,
+      fetch: githubChecksFetch({ strictPolicy: false, ...scenario }),
+    }).requiredChecks({ number: 7, head: HEAD, base: BASE });
+    assert.equal(result.passed, false);
+    assert.ok(result.failures.length > 0);
+  }
 });
 
 test("GitHub effective rules paginate fully and fail closed on a 404", async () => {

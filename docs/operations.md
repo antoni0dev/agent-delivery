@@ -38,7 +38,7 @@ Manager `manage` uses the recorded workspace execution profile unless explicitly
 
 `pause` stops admission and disables future launch agent starts without terminating the active controller. It does not claim that a running native process has terminated. `cancel` owns termination and confirmation for one initiative. `resume` reopens a nonterminal paused initiative through the controller's state rules. `replan` is an explicit operator revision after source, configuration, or scope changes. It preserves the prior request and plan event and refuses revision while existing children still need reconciliation.
 
-Before pull request state is frozen, the controller prepares fresh QA through a separate writer. If the target base changes, the controller updates the branch by merging the fresh base and requires a new full review against that candidate.
+Before pull request state is frozen, the controller prepares fresh QA through a separate writer. With `release.strictCurrentBase: false` (the new-workspace default), an advancing base alone does not force a branch update or invalidate unchanged-head review and QA. Evidence retains its original tested base; it is not relabeled as testing the new integration. GitHub still checks the current target, conflicts, required CI, reviews and actual branch rules immediately before merge. A repository that already requires up-to-date branches continues to enforce that policy. Set `strictCurrentBase: true` to additionally require strict GitHub checks and update/review the branch whenever its base changes.
 
 ## Installation
 

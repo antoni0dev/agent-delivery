@@ -40,7 +40,7 @@ Fill the template using the destination repository and team policy:
 | `commands` | Real executable and argument arrays for this repository's checks |
 | `preparation` | Optional idempotent, lockfile-preserving setup command for a fresh worktree |
 | `environment` | Dedicated non-production QA environment, authentication and allowed mutations |
-| `release` | Development target, merge method, exact required check names and strict current-base policy |
+| `release` | Development target, merge method, exact required check names and optional strict current-base policy |
 | `authority` | Recorded grant reference and only the actions the destination permits |
 
 A merge that deploys production cannot be authorized by declaring it a development merge. Keep production and mainnet flags false only when that describes the real destination. Preserve human-review and CODEOWNER requirements.
@@ -104,7 +104,7 @@ The included source-use receipt records owner authorization for this derived rel
 
 ## Run the first ticket
 
-Reconcile existing owners, sessions, branches and PRs first. Establish one active controller/ownership store. Confirm strict up-to-date required checks and development-merge authority. Select one bounded ticket with known acceptance behavior.
+Reconcile existing owners, sessions, branches and PRs first. Establish one active controller/ownership store. Confirm required checks and development-merge authority. Select one bounded ticket with known acceptance behavior.
 
 ```sh
 delivery activate --config /absolute/private/workspace.json

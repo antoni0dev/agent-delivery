@@ -122,6 +122,7 @@ export function createControllerFixture({
   intake,
   preparation,
   strictPrTitle = false,
+  strictCurrentBase = true,
   notifications = { linear: false, desktop: false },
   desktop = () => undefined,
   onNotify = () => undefined,
@@ -137,6 +138,7 @@ export function createControllerFixture({
   intake?: WorkspaceConfig["linear"]["intake"];
   preparation?: WorkspaceConfig["projects"][number]["preparation"];
   strictPrTitle?: boolean;
+  strictCurrentBase?: boolean;
   notifications?: WorkspaceConfig["notifications"];
   desktop?: (input: { message: string }) => void;
   onNotify?: () => void;
@@ -206,7 +208,7 @@ export function createControllerFixture({
           targetBranch: "main",
           method: "squash",
           deploysProduction: false,
-          strictCurrentBase: true,
+          strictCurrentBase,
           requiredChecks: ["ci"],
         },
       },

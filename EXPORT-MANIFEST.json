@@ -55,13 +55,13 @@
     },
     {
       "path": "dist/config.d.ts",
-      "digest": "187e97c90823a26f26599b2141b3fc0af5eb50d4afa24e0463c384d0651e34b1",
-      "size": 7529
+      "digest": "defb74120d5df7c8dfe6157d071f81b222be613f9a744c17c9e36357a0ac5127",
+      "size": 7517
     },
     {
       "path": "dist/config.js",
-      "digest": "3ca55d1e34c3d647f588c282edbce14c7b238609285b3140c43a08da8c43ea32",
-      "size": 10008
+      "digest": "44dc61e920859361d66c47cd474ee067f130d58bdde00e0914363eb04eaa8932",
+      "size": 10005
     },
     {
       "path": "dist/conformance.d.ts",
@@ -80,8 +80,8 @@
     },
     {
       "path": "dist/controller.js",
-      "digest": "18e5458273fcc0fb5f2e82909c837adfef8e0dfa7fe1c4c15bf9848525b3aeb6",
-      "size": 86750
+      "digest": "0bc6e5fe0f4f33c01a1170a9eea519be68cd38ddc99c1e282cc0420262300596",
+      "size": 87347
     },
     {
       "path": "dist/distribution/export.d.ts",
@@ -230,8 +230,8 @@
     },
     {
       "path": "dist/integrations/github.js",
-      "digest": "4a9282c85c3878ed635569d8ca2747e3b07aa32620ec66ebbb80293b65b7b229",
-      "size": 33271
+      "digest": "a89dd9656d1b7995e7f42c5279de5b60706a55b4ac397c3fb5c4338c14718e8e",
+      "size": 33564
     },
     {
       "path": "dist/integrations/index.d.ts",
@@ -435,8 +435,8 @@
     },
     {
       "path": "docs/adapting-a-repository.md",
-      "digest": "29f9edfdf76da8536ce02eb4aa7fda50b4b03cc0604bdc1dd5548fba896a8953",
-      "size": 12354
+      "digest": "67d3f0dc7b5bfc44667c9b1b0d1d5fd331c2f2be18a7bd8596f9ac75e1e01748",
+      "size": 12345
     },
     {
       "path": "docs/architecture.md",
@@ -460,8 +460,8 @@
     },
     {
       "path": "docs/operations.md",
-      "digest": "b108bd24f24f7dca8a99d53250d512169bebf4bb65f6f512eca469b3f85b9e5e",
-      "size": 13064
+      "digest": "4e42130ee8b4a60c2e1ed0f0c82a3c44d2750bc220660486b19daaf97e6bf070",
+      "size": 13526
     },
     {
       "path": "docs/portable-publication.md",
@@ -470,8 +470,8 @@
     },
     {
       "path": "docs/private-intake.md",
-      "digest": "df39dcaa87e007315de7a2e11dd5ec42b697d0fe22c384e6f4efe2761a6c812b",
-      "size": 3690
+      "digest": "f72f682382c788ea878aa07bb445ccde46614f067912f32e254760ea69aa2e88",
+      "size": 3683
     },
     {
       "path": "knowledge/audit.json",
@@ -605,8 +605,8 @@
     },
     {
       "path": "src/config.ts",
-      "digest": "e88d606b717f9fc902e8cb48d7cf1fbaa98bb489ec47dec8b6d27025e95d89d4",
-      "size": 9867
+      "digest": "e8e98b9b8328e7d8dccd66f4ca296446ba09bfc9c788688582451ecc90bc32cc",
+      "size": 9864
     },
     {
       "path": "src/conformance.ts",
@@ -615,8 +615,8 @@
     },
     {
       "path": "src/controller.ts",
-      "digest": "46f976160c543ff1aacb3c94f7e1230bf0e8091eed2dbcf8a7c743d6f5fd67c3",
-      "size": 82510
+      "digest": "cea35c17cec389d409e4cbef13dc7004a66c593b060133e5c1e3fd1e640da8ae",
+      "size": 83053
     },
     {
       "path": "src/distribution/export.ts",
@@ -690,8 +690,8 @@
     },
     {
       "path": "src/integrations/github.ts",
-      "digest": "22a39e624f895e6826e1d36b7ba525af41adeeb6cf5b960202223ed753f4238d",
-      "size": 33851
+      "digest": "48442cd086b4903c2c15fe742651142444cae78fea883b793bbd3701ec8b21ed",
+      "size": 34102
     },
     {
       "path": "src/integrations/index.ts",
@@ -810,8 +810,8 @@
     },
     {
       "path": "test/controller-fixture.test.ts",
-      "digest": "101263ea3ba163fde0e079974cc06234b66c479c89a6b9ebcaa195225973548c",
-      "size": 19717
+      "digest": "48f647e9f662ed2d1350335a56a18c23ec6d2d12c4eb3adcb89ab47c02b8635a",
+      "size": 19770
     },
     {
       "path": "test/controller-routing.test.ts",
@@ -825,8 +825,8 @@
     },
     {
       "path": "test/controller.test.ts",
-      "digest": "d41019c272f5cb70625ac12b614446bc36160e3303e6eaaeb721bc2172c46761",
-      "size": 15495
+      "digest": "f4e080347e6779f597b3dea83f4694e5cd0e4c61b7599052c624d35ede433772",
+      "size": 17729
     },
     {
       "path": "test/distribution.test.ts",
@@ -845,8 +845,8 @@
     },
     {
       "path": "test/integrations.test.ts",
-      "digest": "5dedf0f6acda148c68a609852fb37c1d7324a24fca7d41243089cc1fd5400b61",
-      "size": 35940
+      "digest": "3d64bcefd704d06991b9fa4ab331acec4d92fcca06e51a68250bf7bc6d1300ec",
+      "size": 38869
     },
     {
       "path": "test/knowledge-evaluation.test.ts",
@@ -919,5 +919,5 @@
       "size": 385
     }
   ],
-  "manifestDigest": "836c79601cf380f94adffadeca4050c3e9ddba90dcc9762b36cc9ccba3c38eda"
+  "manifestDigest": "c1c96975a1c5eda294dedf59e3bdea9942db30eef10fb13ac37a7af079574f9f"
 }

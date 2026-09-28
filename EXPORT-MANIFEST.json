@@ -570,8 +570,8 @@
     },
     {
       "path": "README.md",
-      "digest": "615631e363effa52bfc443bc895a371302fe865469cfa4232741146b2b621ed6",
-      "size": 8771
+      "digest": "c0e5d3752ea6d43c6d3479bcbbb682d1c552f592e96b260d9ce1f1c6af923031",
+      "size": 8769
     },
     {
       "path": "scripts/ingest-sources.py",
@@ -919,5 +919,5 @@
       "size": 385
     }
   ],
-  "manifestDigest": "7ce95a92cec5b16502d3e09a307dc27de9b5818312a010c5a308a3475864f4e5"
+  "manifestDigest": "836c79601cf380f94adffadeca4050c3e9ddba90dcc9762b36cc9ccba3c38eda"
 }

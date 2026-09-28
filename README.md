@@ -10,9 +10,9 @@ For everyday use, read [One manager workflow across clients](docs/engineering-ma
 
 Read [Adapt a repository](docs/adapting-a-repository.md) for installation, private configuration, tracker/GitHub credentials, repository checks, authenticated QA and the first pilot. Use [Private intake](docs/private-intake.md) for daily ticket handoffs and manual work.
 
-This is a private engineering system undergoing operational pilots. Local tests, native Codex trials and tracker reads have been exercised. A real end-to-end delivery, cross-runtime delivery parity and a clean-machine rollout are not yet established. Claude Code and Cursor adapters are implemented but require their own successful trials and access before use.
+This is an experimental engineering system undergoing operational pilots. Local tests, native Codex trials and tracker reads have been exercised. A real end-to-end delivery, cross-runtime delivery parity and a clean-machine rollout are not yet established. Claude Code and Cursor adapters are implemented but require their own successful trials and access before use.
 
-The release includes 58 engineering reference cards and an audited source-coverage inventory. Raw documents, company configurations, credentials, execution history and previous Git history are excluded. Source-use approval is owner-attested, not an independent third-party rights determination. No general redistribution license is granted by this private repository.
+The release includes 58 engineering reference cards and an audited source-coverage inventory. Raw documents, company configurations, credentials, execution history and previous Git history are excluded. Source-use approval is owner-attested, not an independent third-party rights determination. No general redistribution license is granted by this repository.
 
 ## Requirements
 

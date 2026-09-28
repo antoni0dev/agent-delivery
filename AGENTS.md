@@ -1,13 +1,12 @@
-# Agent delivery
+# Portable engineering harness
 
-Build the portable delivery contract, not a project-specific harness. Keep private source snapshots, credentials, identities, paths and run state outside tracked files and export bundles.
+This repository contains shared engineering guidance and procedures for native agent sessions. It does not own application delivery or run a controller.
 
-- Node 24 LTS, TypeScript and SQLite. Run `npm run check` before handoff.
-- One writer per isolated checkout. Independent reviewers do not implement their reviewed changes.
-- Role models are pinned by the selected runtime profile. No implicit substitutions.
-- Local records enforce workflow correctness, not security against a privileged local user.
-- Activation requires capability conformance, reviewed knowledge and destination-specific authority.
-- Do not activate a live workspace or scheduler while developing core tests.
-- Test observable concurrency, stale-evidence, cancellation and recovery behavior.
-- Use types, validated boundaries, object parameters and configuration maps. No speculative frameworks.
-- Never embed company examples, source screenshots or source attribution in transferable files.
+- Preserve the knowledge library, topic index, coverage inventory and audit metadata. Do not rewrite source-derived cards to simplify the tooling.
+- Keep one shared workflow. Client skills are thin entrypoints, and project-specific commands, model preferences and permissions remain in private project configuration.
+- No database, scheduler, provider router, model-proof dispatch gates, or application credentials belong here.
+- Use the selected tool's native agents with bounded tasks, independent review and repository-owned QA and release requirements.
+- Installation only updates manifest-owned files. Preserve team instructions, custom skills, project settings and current work.
+- Use Node built-ins for the small install, selection and validation helpers. Run npm run check after changes.
+- Never include company configuration, tickets, credentials, execution history or raw private sources in transferable files.
+- The archived controller remains available in Git history; do not revive its execution machinery as a dependency of this harness.

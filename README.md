@@ -26,7 +26,7 @@ Read [Migration](docs/migration.md) before replacing an existing controller inst
 
 - [Workflow](WORKFLOW.md): planning, parallel execution, independent review, QA and delivery.
 - `roles/`: focused responsibilities for initiative owners, workers, reviewers and QA.
-- `skills/`: thin manager, knowledge-selection and ticket-shaping entrypoints.
+- `skills/`: manager, knowledge-selection, ticket-shaping, independent PR audit, scoped QA and repository-check procedures.
 - `knowledge/`: the complete existing card library, anti-patterns, examples, coverage inventory and historical audit metadata.
 - `templates/`: repository configuration and resumable initiative notes.
 

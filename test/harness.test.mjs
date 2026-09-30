@@ -10,7 +10,7 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 test('optional knowledge check works from a checkout path containing spaces', t => {
   const directory = mkdtempSync(join(tmpdir(), 'harness with spaces-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
-  for (const name of ['knowledge', 'scripts', 'WORKFLOW.md', 'templates', 'skills'])
+  for (const name of ['knowledge', 'scripts', 'WORKFLOW.md', 'templates', 'skills', 'docs'])
     cpSync(join(root, name), join(directory, name), { recursive: true });
   const result = spawnSync(process.execPath, [join(directory, 'scripts/check.mjs')], { encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
@@ -71,7 +71,11 @@ test('Git worktree exclusion path is resolved through Git rather than .git direc
   const worktree = `${repo}-worktree`;
   execFileSync('git', ['-C', repo, 'worktree', 'add', '--quiet', '--detach', worktree]);
   t.after(() => rmSync(worktree, { recursive: true, force: true }));
-  assert.equal(install(worktree).status, 0);
+  assert.equal(install(repo).status, 0);
+  writeFileSync(join(repo, '.agent-harness/PROJECT.md'), 'Configured repository preferences');
+  assert.notEqual(install(worktree).status, 0);
+  assert.equal(install(worktree, '--project-from', repo).status, 0);
+  assert.equal(readFileSync(join(worktree, '.agent-harness/PROJECT.md'), 'utf8'), 'Configured repository preferences');
   assert.equal(execFileSync('git', ['-C', worktree, 'status', '--porcelain'], { encoding: 'utf8' }).trim(), '');
 });
 
@@ -80,7 +84,7 @@ test('an unmodified managed install accepts a source update without deleting unr
   assert.equal(install(repo).status, 0);
   writeFileSync(join(repo, '.agent-harness/personal-note.md'), 'Keep me');
   const packageCopy = checkout(t);
-  for (const name of ['scripts', 'knowledge', 'skills', 'roles', 'templates', 'WORKFLOW.md']) cpSync(join(root, name), join(packageCopy, name), { recursive: true });
+  for (const name of ['scripts', 'knowledge', 'skills', 'roles', 'templates', 'WORKFLOW.md', 'docs']) cpSync(join(root, name), join(packageCopy, name), { recursive: true });
   writeFileSync(join(packageCopy, 'WORKFLOW.md'), 'Updated shared workflow');
   const result = spawnSync(process.execPath, [join(packageCopy, 'scripts/install.mjs'), '--repo', repo, '--client', 'codex'], { encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
@@ -98,4 +102,31 @@ test('staged private project settings block installation before any managed writ
   assert.equal(existsSync(join(repo, '.agent-harness/WORKFLOW.md')), false);
   assert.equal(existsSync(join(repo, '.agents')), false);
   assert.equal(readFileSync(join(repo, '.agent-harness/PROJECT.md'), 'utf8'), 'Private project settings');
+});
+
+for (const [client, folder] of [['codex', '.agents'], ['claude', '.claude'], ['cursor', '.cursor']]) {
+  test(`${client} installs every operating skill and resolves its local documentation links`, t => {
+    const repo = checkout(t);
+    const result = spawnSync(process.execPath, [join(root, 'scripts/install.mjs'), '--repo', repo, '--client', client], { encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+    for (const name of ['engineering-manager', 'engineering-knowledge', 'shape-linear-ticket', 'pr-audit', 'project-qa', 'quality-gates']) {
+      const skill = join(repo, folder, 'skills', name, 'SKILL.md');
+      const content = readFileSync(skill, 'utf8');
+      for (const match of content.matchAll(/\]\((\.\.\/[^)]+)\)/g))
+        assert.ok(existsSync(join(repo, folder, 'skills', name, match[1])), `${name}: ${match[1]}`);
+    }
+    assert.ok(existsSync(join(repo, '.agent-harness/docs/knowledge.md')));
+    assert.ok(existsSync(join(repo, '.agent-harness/docs/readiness.md')));
+    assert.match(result.stdout, /Installation is not readiness/);
+  });
+}
+
+test('project settings cannot be imported from another repository', t => {
+  const repo = checkout(t);
+  const foreign = checkout(t);
+  assert.equal(install(foreign).status, 0);
+  const result = install(repo, '--project-from', foreign);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /same Git repository/);
+  assert.equal(existsSync(join(repo, '.agent-harness')), false);
 });

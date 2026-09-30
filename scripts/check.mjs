@@ -40,7 +40,7 @@ for (const card of cards) for (const topic of card.topics) (expectedTopics[topic
 assert.deepEqual(topics.topics, expectedTopics);
 execFileSync(process.execPath, [fileURLToPath(new URL('scripts/render-knowledge-guide.mjs', root)), '--check'], { stdio: 'inherit' });
 for (const name of ['WORKFLOW.md', 'templates/PROJECT.md', 'templates/initiative.md']) assert.ok(read(name).trim(), `Missing ${name}`);
-for (const name of ['engineering-manager', 'engineering-knowledge', 'shape-linear-ticket']) {
+for (const name of ['engineering-manager', 'engineering-knowledge', 'shape-linear-ticket', 'pr-audit', 'project-qa', 'quality-gates']) {
   const content = read(`skills/${name}/SKILL.md`);
   assert.ok(content.includes('.agent-harness/WORKFLOW.md'), `${name} must load shared workflow`);
   assert.ok(content.includes('.agent-harness/PROJECT.md'), `${name} must load project contract`);

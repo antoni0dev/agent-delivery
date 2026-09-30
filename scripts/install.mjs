@@ -13,13 +13,15 @@ try {
   let repo;
   let client;
   let dryRun = false;
+  let projectFrom;
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--repo') repo = args[++i];
     else if (args[i] === '--client') client = args[++i];
+    else if (args[i] === '--project-from') projectFrom = args[++i];
     else if (args[i] === '--dry-run') dryRun = true;
     else fail(`Unknown argument: ${args[i]}`);
   }
-  if (!repo || !isAbsolute(repo) || !Object.hasOwn(clients, client)) fail('Use --repo ABSOLUTE_PATH --client codex|claude|cursor [--dry-run]');
+  if (!repo || !isAbsolute(repo) || !Object.hasOwn(clients, client)) fail('Use --repo ABSOLUTE_PATH --client codex|claude|cursor [--project-from CONFIGURED_CHECKOUT] [--dry-run]');
   repo = realpathSync(repo);
   const top = realpathSync(execFileSync('git', ['-C', repo, 'rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim());
   if (top !== repo) fail('--repo must be a Git checkout root');
@@ -46,8 +48,8 @@ try {
       for (const entry of readdirSync(from)) add(join(from, entry), `${to}/${entry}`);
     } else files.set(to, readFileSync(from));
   };
-  for (const name of ['WORKFLOW.md', 'roles', 'knowledge', 'scripts/select.mjs', 'templates/initiative.md']) add(join(source, name), `.agent-harness/${name}`);
-  const skills = ['engineering-manager', 'engineering-knowledge', 'shape-linear-ticket'];
+  for (const name of ['WORKFLOW.md', 'roles', 'knowledge', 'scripts/select.mjs', 'templates/initiative.md', 'docs/knowledge.md', 'docs/readiness.md']) add(join(source, name), `.agent-harness/${name}`);
+  const skills = ['engineering-manager', 'engineering-knowledge', 'shape-linear-ticket', 'pr-audit', 'project-qa', 'quality-gates'];
   for (const skill of skills) add(join(source, `skills/${skill}/SKILL.md`), `${clients[client]}/skills/${skill}/SKILL.md`);
   // Validate every planned write before modifying the checkout.
   for (const [name, bytes] of files) {
@@ -60,7 +62,18 @@ try {
   }
   const projectPath = safePath('.agent-harness/PROJECT.md');
   safePath('.agent-harness/initiatives');
-  const projectTemplate = readFileSync(join(source, 'templates/PROJECT.md'));
+  let projectTemplate = readFileSync(join(source, 'templates/PROJECT.md'));
+  const gitCommon = root => realpathSync(execFileSync('git', ['-C', root, 'rev-parse', '--path-format=absolute', '--git-common-dir'], { encoding: 'utf8' }).trim());
+  if (projectFrom) {
+    if (!isAbsolute(projectFrom)) fail('--project-from requires an absolute checkout path');
+    const origin = realpathSync(projectFrom);
+    if (gitCommon(origin) !== gitCommon(repo)) fail('--project-from must belong to the same Git repository');
+    projectTemplate = readFileSync(join(origin, '.agent-harness/PROJECT.md'));
+  }
+  const common = gitCommon(repo);
+  const gitDirectory = realpathSync(execFileSync('git', ['-C', repo, 'rev-parse', '--absolute-git-dir'], { encoding: 'utf8' }).trim());
+  if (common !== gitDirectory && !existsSync(projectPath) && !projectFrom)
+    fail('New worktree: use --project-from <configured-checkout> to preserve project settings');
   const exclude = resolve(repo, execFileSync('git', ['-C', repo, 'rev-parse', '--git-path', 'info/exclude'], { encoding: 'utf8' }).trim());
   if (existsSync(exclude) && lstatSync(exclude).isSymbolicLink()) fail('Refusing symlinked Git exclusion file');
   const exclusions = ['/.agent-harness/', ...skills.map(skill => `/${clients[client]}/skills/${skill}/`)];
@@ -82,7 +95,7 @@ try {
       writeFileSync(exclude, priorExclude + (priorExclude.endsWith('\n') || !priorExclude ? '' : '\n') + missing.join('\n') + '\n');
     }
   }
-  process.stdout.write(`${dryRun ? 'Would install' : 'Installed'} ${files.size} managed files for ${client}. PROJECT.md and initiatives are preserved.\n`);
+  process.stdout.write(`${dryRun ? 'Would install' : 'Installed'} ${files.size} managed files for ${client}. PROJECT.md and initiatives are preserved. Installation is not readiness: complete .agent-harness/docs/readiness.md before delivery.\n`);
 } catch (error) {
   process.stderr.write(`${error.message}\n`);
   process.exitCode = 1;

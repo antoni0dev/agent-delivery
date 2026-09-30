@@ -22,6 +22,7 @@ Copy the following generic files without replacing existing custom files:
 | Source in this harness | Destination in your repository |
 | --- | --- |
 | `WORKFLOW.md`, `roles/`, `knowledge/` | Same names under `.agent-harness/` |
+| `docs/knowledge.md`, `docs/readiness.md` | Same names under `.agent-harness/docs/` |
 | `templates/initiative.md` | `.agent-harness/templates/initiative.md` |
 | `templates/PROJECT.md` | `.agent-harness/PROJECT.md`, only if absent |
 | Each folder under `skills/` | `.agents/skills/` for Codex, `.claude/skills/` for Claude, or `.cursor/skills/` for Cursor |
@@ -32,11 +33,11 @@ A manual copy does not create an installer ownership manifest. Update it by revi
 
 ## Project configuration and use
 
-Installation places the workflow, roles, knowledge and templates in `.agent-harness/` and the three skills in the selected client's repository skill directory. Preserve existing team instructions and unrelated settings. Do not overwrite local project decisions on upgrades; review any managed-file conflicts the installer reports.
+Installation places the workflow, roles, knowledge and templates in `.agent-harness/` and the six skills in the selected client's repository skill directory. Preserve existing team instructions and unrelated settings. Do not overwrite local project decisions on upgrades; review any managed-file conflicts the installer reports.
 
 Fill `.agent-harness/PROJECT.md` from this repository's sources: tracker scope, branch permissions, models, dependency setup, checks, QA environment and existing ownership. Reference credentials through the destination's normal tools; never copy them into the harness or portable upstream repository. Decide with the team which generic files may be committed; keep company-private configuration and execution notes local where required.
 
-Check that the client discovers `engineering-manager`, `engineering-knowledge` and `shape-linear-ticket`. A client that cannot discover skills can read `.agent-harness/WORKFLOW.md` explicitly. Verify its actual native subagent/model controls; an installed skill does not manufacture missing capabilities.
+Check that the client discovers `engineering-manager`, `engineering-knowledge`, `shape-linear-ticket`, `pr-audit`, `project-qa` and `quality-gates`. A client that cannot discover skills can read `.agent-harness/WORKFLOW.md` explicitly. Verify its actual native subagent/model controls; an installed skill does not manufacture missing capabilities.
 
 Try one bounded initiative:
 
@@ -55,3 +56,21 @@ node .agent-harness/scripts/select.mjs --card state-single-owner
 The manager shares selected full card content and exceptions with workers and reviewers. Do not treat a topic match or read receipt as proof of engineering quality.
 
 Existing controller users must follow [migration](migration.md) before starting a competing native owner.
+
+## Isolated worktrees
+
+Git does not copy this locally ignored harness when creating a worktree. Install it there before opening a fresh worker session:
+
+```sh
+node scripts/install.mjs --repo /absolute/path/to/worktree --client codex --project-from /absolute/path/to/configured-checkout
+```
+
+The helper verifies both checkouts belong to the same Git repository and copies the configured PROJECT.md only when absent. Existing project settings and notes remain untouched. This is a snapshot: the manager remains responsible for sharing later configuration changes. Alternatively, provide workers absolute paths to the original same-repository harness, role/skill and configuration. Keep one canonical initiative note; do not duplicate ownership records between worktrees.
+
+## Included operating skills
+
+- `pr-audit`: independent read-only review, precise findings and repair handoff.
+- `project-qa`: scoped browser/behavior verification and evidence reporting.
+- `quality-gates`: discover and run the destination's actual checks without imposing a language or toolchain.
+
+Complete `.agent-harness/docs/readiness.md` for the intended task before calling the project ready. Installed documentation includes `.agent-harness/docs/knowledge.md` to distinguish the active guidance from historical evaluator records.

@@ -71,10 +71,18 @@ The helper verifies both checkouts belong to the same Git repository and copies 
 
 ## Operating skills
 
-The installer copies every skill directory under the harness `skills/`; each `SKILL.md` description states when it applies. The operating skills include:
+The installer copies every skill directory under the harness `skills/`; each `SKILL.md` description states when it applies:
 
+- `engineering-manager`: initiative ownership, planning, delegation and integration.
+- `engineering-knowledge`: selecting core and pack cards for planning, implementation and review.
+- `verify-task`: source triangulation before non-trivial implementation.
+- `shape-linear-ticket`: master tickets with acceptance criteria and open questions.
 - `pr-audit`: independent read-only review, precise findings and repair handoff.
+- `resolve-pr-comments`: verifying and resolving review feedback.
 - `project-qa`: scoped browser/behavior verification and evidence reporting.
 - `quality-gates`: discover and run the destination's actual checks without imposing a language or toolchain.
+- `repo-bootstrap`: day-one setup of a new repository.
+
+If the destination already has a skill directory with the same name as a harness skill, the installer refuses before writing anything. Rename the team skill, or install manually and record which skill wins.
 
 Complete `.agent-harness/docs/readiness.md` for the intended task before calling the project ready. Installed documentation includes `.agent-harness/docs/knowledge.md` to distinguish the active guidance from historical evaluator records.

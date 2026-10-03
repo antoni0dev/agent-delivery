@@ -13,7 +13,7 @@ Read-only money-path lens. Follow `roles/reviewer.md` for independence, evidence
 - **Spender and router per chain.** Addresses come from the per-chain registry with provenance, are checksummed and match the wallet's current chain. No cross-chain fallback address.
 - **Signed payload equals displayed intent.** The calldata or typed data the wallet signs encodes the token, amount, recipient, minimum out, deadline and chain the user confirmed. Nothing changes the payload after confirmation.
 - **Idempotency and unknown outcomes.** No automatic retry, resubmission or rebroadcast of a non-idempotent submission. Idempotency keys are sent where the contract supports them and reused for the same intent. A timeout, lost response or RPC failure is an unknown outcome: the flow must not invite resubmission before the authoritative source (order ID, transaction hash or nonce) settles it. Flag reachable duplicate or lost-funds paths; do not demand reconciliation machinery the contract does not require.
-- **Address and signing changes.** Any change to a contract, router, spender or token address, chain configuration or signing code needs the human merge defined in PROJECT.md. Verify its provenance and state the requirement in the result.
+- **Human merge.** Money-flagged changes, including any change to a contract, router, spender or token address, chain configuration or signing code, need a human merge unless PROJECT.md explicitly grants standing authority for that class. Verify the provenance of address changes and state the requirement in the result.
 
 ## Verdict
 

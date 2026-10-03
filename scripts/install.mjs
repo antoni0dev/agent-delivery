@@ -95,7 +95,7 @@ try {
       writeFileSync(exclude, priorExclude + (priorExclude.endsWith('\n') || !priorExclude ? '' : '\n') + missing.join('\n') + '\n');
     }
   }
-  process.stdout.write(`${dryRun ? 'Would install' : 'Installed'} ${files.size} managed files for ${client}. PROJECT.md and initiatives are preserved. Installation is not readiness: complete .agent-harness/docs/readiness.md before delivery.\n`);
+  process.stdout.write(`${dryRun ? 'Would install' : 'Installed'} ${files.size} managed files for ${client}. PROJECT.md and initiatives are preserved; after an upgrade, compare PROJECT.md with .agent-harness/templates/PROJECT.md for new sections. Installation is not readiness: complete .agent-harness/docs/readiness.md before delivery.\n`);
 } catch (error) {
   process.stderr.write(`${error.message}\n`);
   process.exitCode = 1;

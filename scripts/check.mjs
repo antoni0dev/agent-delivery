@@ -71,12 +71,13 @@ const walk = name => {
   return stat?.isFile() ? [name] : [];
 };
 const leaks = [];
-for (const scanRoot of ['knowledge/packs', 'roles', 'skills', 'templates', 'docs', 'WORKFLOW.md', 'README.md']) {
+for (const scanRoot of ['knowledge/packs', 'knowledge/README.md', 'roles', 'skills', 'templates', 'docs', 'scripts', 'test', '.github', 'WORKFLOW.md', 'README.md', 'AGENTS.md']) {
   for (const name of walk(scanRoot)) {
     const file = shown(name, `${scanRoot}/<redacted path>`);
     const report = (location, text) => leaksIn(text).forEach(category => leaks.push(`${category}: ${file}${location}`));
     report(' (file name)', name);
     const text = readFileSync(join(base, name), 'utf8');
+    const before = leaks.length;
     const pack = name.endsWith('.json') ? parseJson(text) : undefined;
     if (Array.isArray(pack?.cards)) {
       const { cards: packCards, ...metadata } = pack;
@@ -85,6 +86,8 @@ for (const scanRoot of ['knowledge/packs', 'roles', 'skills', 'templates', 'docs
     } else {
       text.split('\n').forEach((line, index) => report(`:${index + 1}`, line));
     }
+    // Catch terms wrapped across lines and values hidden by duplicate JSON keys.
+    if (leaks.length === before) report(' (across lines or raw text)', text.replace(/\\n/g, ' ').replace(/\s+/g, ' '));
   }
 }
 if (leaks.length) throw new Error(`Leak scan failed (matched text is not shown):\n${leaks.join('\n')}`);
@@ -160,7 +163,7 @@ for (const file of packFiles) {
     sectionProblems(card.content).forEach(cardProblem);
   });
 }
-const referencePattern = /(?:core|pack) cards? ([a-z0-9-]+(?:(?:, | and )[a-z0-9-]+)*)/g;
+const referencePattern = /(?:(?:core|pack) cards?|\bsee) ([a-z0-9]+(?:-[a-z0-9]+)+(?:(?:, | and )[a-z0-9]+(?:-[a-z0-9]+)+)*)/gi;
 for (const file of packFiles) {
   const pack = parseJson(readFileSync(join(packDirectory, file), 'utf8'));
   for (const card of Array.isArray(pack?.cards) ? pack.cards : []) {
@@ -189,4 +192,4 @@ for (const name of skills) {
   assert.ok(content.includes('.agent-harness/WORKFLOW.md'), `${name} must load shared workflow`);
   assert.ok(content.includes('.agent-harness/PROJECT.md'), `${name} must load project contract`);
 }
-process.stdout.write(`Knowledge release, independent audit bindings, ${packFiles.length} knowledge pack(s), leak scan, generated guides and ${skills.length} shared skill entrypoints verified.\n`);
+process.stdout.write(`Knowledge release, independent audit bindings, ${packFiles.length} knowledge pack(s), leak scan (${denyTerms.length ? `${denyTerms.length} private deny-list terms` : 'no private deny list found; built-in patterns only'}), generated guides and ${skills.length} shared skill entrypoints verified.\n`);

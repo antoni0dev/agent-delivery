@@ -234,6 +234,27 @@ test('leak scan reports deny-list terms and home paths by location without print
   for (const text of [term, 'example-user']) assert.ok(!output.includes(text), `printed ${text}`);
 });
 
+test('leak scan catches key material, wrapped terms and leaky file names without printing them', t => {
+  const directory = harnessCopy(t);
+  mkdirSync(join(directory, '.local'));
+  writeFileSync(join(directory, '.local/deny-terms.txt'), 'zq9 wrapped phrase\nzq8-leaky\n');
+  const keyHeader = ['-----BEGIN', 'EC PRIVATE KEY-----'].join(' ');
+  writeFileSync(join(directory, 'templates/leak-check.md'), `${keyHeader}\nvalue ${'0x'}${'ab'.repeat(32)}\n`);
+  writeFileSync(join(directory, 'templates/zq8-leaky-name.md'), 'Clean content.\n');
+  const docs = readFileSync(join(directory, 'docs/readiness.md'), 'utf8');
+  writeFileSync(join(directory, 'docs/readiness.md'), `${docs}\nSee zq9\nwrapped phrase.\n`);
+  const result = node(join(directory, 'scripts/check.mjs'));
+  assert.notEqual(result.status, 0);
+  for (const expected of [
+    /private key header: templates\/leak-check\.md:1\n/,
+    /0x-prefixed 64-hex value: templates\/leak-check\.md:2\n/,
+    /deny-list term: templates\/<redacted path> \(file name\)\n/,
+    /deny-list term: docs\/readiness\.md \(across lines or raw text\)\n/,
+  ]) assert.match(result.stderr, expected);
+  const output = (result.stdout + result.stderr).toLowerCase();
+  for (const text of ['zq9', 'zq8-leaky', 'abab']) assert.ok(!output.includes(text), `printed ${text}`);
+});
+
 test('installer copies packs, templates and every skill directory', t => {
   const source = harnessCopy(t);
   mkdirSync(join(source, 'skills/extra-skill/references'), { recursive: true });

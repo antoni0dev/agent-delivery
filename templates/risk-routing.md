@@ -29,9 +29,9 @@ QA is not a lens: `project-qa` runs after audit evidence with `roles/qa.md`. Add
 | Signal | Example matches | Lenses | Packs | Checks | Flags and policy |
 |---|---|---|---|---|---|
 | Signing and broadcast | Wallet sign and send calls such as `signTypedData`, `signTransaction` or `sendTransaction`; `permit`, `approve` and allowance changes | general, money, contract | money, chain, execution | Mainnet broadcast guard; E2E fixture traps with a deterministic injected wallet; testnet QA for writes | money; human merge |
-| Amount and decimal math | Unit conversion, decimals, slippage, basis points, fee math, float conversion near amounts | general, money | money | No float parsing of wire amounts; focused boundary tests | money |
+| Amount and decimal math | Unit conversion, decimals, slippage, basis points, fee math, float conversion near amounts | general, money | money | No float parsing of wire amounts; focused boundary tests | money; human merge |
 | Address and chain configuration | Contract, router, spender or token address constants; chain ID maps; RPC endpoints | general, money, contract | chain, contracts | Contract provenance verifier; Guarded paths exist | money; human merge |
-| Mutations and idempotency | Mutation hooks, POST, PUT, PATCH or DELETE callers, idempotency keys, retry options, auth-refresh interceptors | general, plus money on a money path | execution | No retry option on mutations | money on a money path |
+| Mutations and idempotency | Mutation hooks, POST, PUT, PATCH or DELETE callers, idempotency keys, retry options, auth-refresh interceptors | general, plus money on a money path | execution | No retry option on mutations | money and human merge on a money path |
 | Streams and live data | Socket clients, subscriptions, stream handlers, polling loops, cache writers for stream-owned keys | general, contract | realtime | No refetch of stream-owned cache keys; Polling stops on terminal errors | - |
 | Contract specs | OpenAPI documents, stream contracts, ABIs, indexer schemas, generated clients and their provenance | general, contract | contracts | Contract provenance verifier | - |
 | CI workflows | Workflow definitions, required check aggregation, release and deploy scripts, branch rulesets | general | operations | Guarded paths exist; Agent merge guard; PR title and commit lint | human review per policy |

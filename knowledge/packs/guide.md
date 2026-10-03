@@ -72,7 +72,7 @@ A candidate pack is a usable decision aid that the historical 58-card audit does
   - [Report readiness only when the service can work](#operations-honest-readiness-probes)
   - [Ship every alert with a runbook and permission level](#operations-alert-runbook-automation-level)
   - [Rate limit at the edge with explicit failure posture](#operations-edge-rate-limit-failure-posture)
-  - [Verify data against independent sources nightly](#operations-independent-source-correctness)
+  - [Verify data against independent sources on a schedule](#operations-independent-source-correctness)
   - [Ratchet rules you cannot deny outright](#operations-ratchet-unfixable-rules)
   - [Split release preparation from production authority](#operations-split-release-authority-provenance)
   - [Promote environments through Git and strict tag patterns](#operations-gitops-tag-pattern-promotion)
@@ -119,7 +119,7 @@ A candidate pack is a usable decision aid that the historical 58-card audit does
 
 ## Resolve chain capability exhaustively and assert at dispatch
 
-Chain kind decides how to read or sign; capability decides whether the product is open on that chain. Resolve capability in one resolver keyed by the full chain union (`satisfies Record<Chain, Resolver>`) that returns enabled, pending or disabled. Selectors read it, but every effect path re-asserts enabled at admission and inside the final write after any awaited read, since rollout state can change before dispatch. Pending hides the chain from new actions but keeps persisted selections; only disabled purges them.
+Chain kind decides how to read or sign; capability decides whether the product is open on that chain. Resolve capability in one resolver keyed by the full chain union (`satisfies Record<Chain, Resolver>`) that returns enabled, pending or disabled. Selectors read it, but every effect path re-asserts enabled at admission and inside the final write after any awaited read, since rollout state can change before dispatch. Pending blocks new actions on the chain but keeps persisted selections, and only disabled purges them; whether a pending chain stays visible is a product decision.
 
 **Apply when:** A diff adds a chain, a rollout flag or per-chain toggle, or a mutation, signing or navigation path that takes a chain argument.
 
@@ -227,7 +227,7 @@ When a service requests signatures without prompting the user, the user's wallet
 
 **Apply when:** Adding a signing route, token or session-key policy, transaction kind, or any flow signing without a user prompt.
 
-**Boundary notes:** An empty rule allows everything, so review breadth, not syntax. Preset references let the signer narrow scope in a release; inline policies sign exact bytes.
+**Boundary notes:** An empty rule allows everything, so review breadth, not syntax. Preset references let the signer change scope in a release, narrower or wider, without the user re-consenting, so preset edits are policy changes that need review; inline policies sign exact bytes.
 
 **Checks:** A raw message that decodes as a transaction is judged as one. Uninspectable content (raw digests, unresolved lookup-table programs) needs explicit opt-in. Regexes are anchored and size- and memory-capped. The token's signing family comes from its signature, not a declared field. Missing MFA declines. Retiring allow-all legacy tokens backfills before the switch flips.
 
@@ -297,7 +297,7 @@ On restart, resume from the maximum of independent lower bounds on what was alre
 
 **Boundary notes:** Every candidate must be a true lower bound, written after publication was acknowledged, never an intent to publish. Going live at the head skips history, which suits a feed with a separate backfill.
 
-**Checks:** Checkpoint writes follow publish acknowledgement. Stream retention outlasts a deploy cycle. The chosen source and height are logged and exported. The plan states whether consumers tolerate a replayed boundary block; if not, the resume point must be exact. Tests cover stream only, checkpoint only, each one higher, and both reads failing.
+**Checks:** Checkpoint writes follow publish acknowledgement. Stream retention outlasts a deploy cycle. The chosen source and height are logged and exported. The plan states whether consumers tolerate a replay, a boundary block normally or a whole span when a higher source is unreadable; if not, the resume point must be exact. Tests cover stream only, checkpoint only, each one higher, and both reads failing.
 
 **Anti-pattern:** Trust only the checkpoint store, or block boot until every store is readable.
 
@@ -325,7 +325,7 @@ Pack: `chain` (candidate). Topics: `chain`, `data`, `operations`, `backend`, `im
 
 ## Budget every per-block stage against the block clock
 
-A chain follower that falls behind does not degrade, it accumulates, so the block interval is a hard budget: every per-block stage (fetch, trace, decode, enrich, publish) is a histogram whose p99 sits under the fastest served chain's block time with headroom. The node is a metered budget too: a small constant number of requests per block (say block, receipts, traces), no per-transaction RPC, no refetch of data the block carried, and a written ceiling for anything extra. Queues are bounded and never lossy, with exported depth and source lag. Refines core card operations-load-and-tail-latency.
+A chain follower that falls behind never catches up on its own; its lag only grows, so the block interval is a hard budget: every per-block stage (fetch, trace, decode, enrich, publish) is a histogram whose p99 sits under the fastest served chain's block time with headroom. The node is a metered budget too: a small constant number of requests per block (say block, receipts, traces), no per-transaction RPC, no refetch of data the block carried, and a written ceiling for anything extra. Queues are bounded and never lossy, with exported depth and source lag. Refines core card operations-load-and-tail-latency.
 
 **Apply when:** Adding a stage or RPC call to a block path, putting a faster chain on a shared core, or reviewing indexer performance.
 
@@ -395,7 +395,7 @@ Pack: `chain` (candidate). Topics: `chain`, `storage`, `data`, `backend`, `imple
 
 ## Classify RPC failures before retrying or caching them
 
-Every chain read classifies a failure as definitive, where the chain answered (revert, undecodable return, no code), or transient, where no answer arrived (transport error, timeout, throttle, node behind the pinned block, pruned state). Detect reverts by error code or revert envelope first and never infer a node condition from revert text, because a contract chooses its own revert string. Cache probe results as Value, Absent or Unknown, negative-cache only definitive misses, and leave transient failures Unknown to re-probe.
+Every chain read classifies a failure as definitive, where the chain answered (revert, undecodable return, no code), or transient, where no answer arrived (transport error, timeout, throttle, node behind the pinned block, pruned state). Detect reverts by error code or revert envelope first and never infer a node condition from revert text, because a contract chooses its own revert string. Cache probe results as Value, Absent or Unknown, negative-cache only definitive misses, and leave transient failures Unknown to re-probe. Pack card chain-breakers-only-for-interchangeable-providers decides when a failure moves traffic.
 
 **Apply when:** Adding a contract read or account query, a capability probe (does this contract expose X), a retry wrapper, an RPC fallback chain, or a cache of contract metadata.
 
@@ -463,7 +463,7 @@ Pack: `chain` (candidate). Topics: `chain`, `errors`, `operations`, `backend`, `
 
 ## Version contract artifacts and gate address changes
 
-Recommended practice (a gap in the reference systems): treat ABIs, indexer event schemas, token lists and per-chain address config as versioned artifacts with a recorded origin (deployment transaction or verified source) and a content hash checked in CI or at boot. Any change to an address, spender or router allowlist, chain ID mapping or token list routes to money review and a human merge, never auto-merge. Selecting an environment's address set is explicit and fails closed. Refines core card dependency-reproducibility.
+Recommended practice: treat ABIs, indexer event schemas, token lists and per-chain address config as versioned artifacts with a recorded origin (deployment transaction or verified source) and a content hash checked in CI or at boot. Any change to an address, spender or router allowlist, chain ID mapping or token list routes to money review and a human merge, never auto-merge. Selecting an environment's address set is explicit and fails closed. Refines core card dependency-reproducibility.
 
 **Apply when:** A diff touches a contract address, allowlist, chain ID table, ABI, event signature, token list or deployment file.
 
@@ -499,7 +499,7 @@ Pack: `chain` (candidate). Topics: `contracts`, `security`, `frontend`, `backend
 
 ## Prove wallet and chain journeys with deterministic fixtures
 
-Recommended practice (a gap in the reference systems): test in three tiers, namely an injected deterministic wallet provider (scripted accounts, chain ID, signatures, rejections) for inert browser fixtures, a local fork pinned at a block for contract journeys, and funded testnet identities for a few smoke runs. Script the failure journeys: user reject, chain switch mid-flow, insufficient allowance, pending, replaced, dropped, reorg and RPC failure. A mainnet broadcast guard refuses any script combining a mainnet RPC with key material. Refines core card tests-risk-observable-behavior.
+Recommended practice: test in three tiers, namely an injected deterministic wallet provider (scripted accounts, chain ID, signatures, rejections) for inert browser fixtures, a local fork pinned at a block for contract journeys, and funded testnet identities for a few smoke runs. Script the failure journeys: user reject, chain switch mid-flow, insufficient allowance, pending, replaced, dropped, reorg and RPC failure. A mainnet broadcast guard refuses any script combining a mainnet RPC with key material. Refines core card tests-risk-observable-behavior.
 
 **Apply when:** A change touches wallet connection, signing, approvals, chain switching or transaction status UI, or adds a script holding keys or RPC endpoints.
 
@@ -749,7 +749,7 @@ Pack: `contracts` (candidate). Topics: `boundaries`, `types`, `storage`, `fronte
 
 ## Validate payloads strictly, envelopes tolerantly, unknowns loudly
 
-A stream or REST consumer validates the payload with the generated strict schema and parses the envelope tolerantly (strip unknown keys, default missing acknowledgement fields), so protocol additions drop nothing while payload drift is caught. A rejected payload goes to the owning feature's contract-failure and recovery path; it is not a subscription error and never satisfies an acknowledgement. Unknown external discriminants (status, side, type) fail at the boundary, and a Record lookup keyed by a wire value asserts the key existed. Refines core card types-boundary-validation.
+A stream or REST consumer validates the payload with the generated strict schema and parses the envelope tolerantly (strip unknown keys, default missing acknowledgement fields), so protocol additions drop nothing while payload drift is caught. A rejected payload goes to the owning feature's contract-failure and recovery path; it is not a subscription error and never satisfies an acknowledgement. Unknown external discriminants (status, side, type) fail at the boundary, and a Record lookup keyed by a wire value asserts the key existed. Refines core card types-boundary-validation. Pack card realtime-validate-payloads-at-transport places this at the socket transport.
 
 **Apply when:** Writing a stream adapter, a REST response mapper, or a label or handler map keyed by a backend enum.
 
@@ -764,13 +764,13 @@ A stream or REST consumer validates the payload with the generated strict schema
 **Bad example (illustrative):**
 
 ```text
-const label = sideLabels[order.side] ?? ''
+const sideText = SIDE_TEXT[row.side] || 'unknown'
 ```
 
 **Better example (illustrative):**
 
 ```text
-const label = required(sideLabels[order.side], 'label for side ' + order.side)
+const sideText = mustExist(SIDE_TEXT[row.side], 'no text for side ' + row.side)
 ```
 
 **Legitimate exceptions:** Third-party sockets keep their own boundary policy. An intentionally open enum with an explicit unknown branch is fine when the product defines how unknown renders.
@@ -857,7 +857,7 @@ Pack: `contracts` (candidate). Topics: `contracts`, `data`, `distributed`, `back
 
 ## Repair insert-triggered aggregates after replays deepest-first
 
-Materialized views fire on insert, before the base table's merge-time deduplication, so a replayed or re-delivered row collapses in the base table but stays double-counted in any summing aggregate built from it (for example views over a replacing merge-tree table). Views also never fire on delete. Treat every replay and backfill as aggregate-corrupting and repair the whole chain: drop the affected partitions deepest dependent first, then re-derive once with a statement that inserts only missing buckets.
+Where materialized views fire on insert (insert-triggered columnar engines; refresh-based views recompute instead), they run before the base table's merge-time deduplication, so a replayed or re-delivered row collapses in the base table but stays double-counted in any summing aggregate built from it (for example views over a replacing merge-tree table). Views also never fire on delete. Treat every replay and backfill as aggregate-corrupting and repair the whole chain: drop the affected partitions deepest dependent first, then re-derive once with a statement that inserts only missing buckets.
 
 **Apply when:** Replaying a stream, re-running a backfill, redelivering a consumer backlog, or adding a rollup fed by a deduplicating table.
 
@@ -1001,7 +1001,7 @@ Pack: `contracts` (candidate). Topics: `types`, `boundaries`, `frontend`, `backe
 
 ## Keep money, time and estimates unambiguous on the wire
 
-Money crosses every boundary as a decimal string and stays exact end to end: no float conversion before validation, arithmetic or submission. Timestamps use one unit (milliseconds) on the wire, converted from storage-native units in a wire-type shim. Requested or quoted amounts and executed fills are separate fields, and a quoted output is labelled an estimate until the authoritative fill or receipt arrives.
+Money crosses every boundary as a decimal string and stays exact end to end: no float conversion before validation, arithmetic or submission. Timestamps use one unit (milliseconds) on the wire, converted from storage-native units in a wire-type shim. Requested or quoted amounts and executed fills are separate fields, and a quoted output is labelled an estimate until the authoritative fill or receipt arrives. Refines pack cards money-exact-decimal-strings, money-backend-decimal-wire-type and money-timestamp-units-by-wire.
 
 **Apply when:** Adding a money or time field to a response or payload, building a mutation payload, or showing expected versus received amounts.
 
@@ -1022,7 +1022,7 @@ minOut = Number(quote.out) * 0.99; toast('Received ' + quote.out)
 **Better example (illustrative):**
 
 ```text
-minOut = applyBps(quote.out, slippageBps) on decimal strings; show the output as estimated until the fill event reports the executed amount.
+minOut = applyBps(quote.out, slippageBps) on decimal strings, rounded as pack card money-rounding-direction-by-bound specifies; show the output as estimated until the fill event reports the executed amount.
 ```
 
 **Legitimate exceptions:** Integer minor units are an equally exact wire format when the contract declares them. Estimate copy, slippage and tolerance values are product decisions and must be sourced.
@@ -1063,7 +1063,7 @@ onSubmit: const op = { id: newId(), key: newKey() }; track(op.id); send(payload,
 
 **Legitimate exceptions:** Calls the backend documents as naturally idempotent, such as setting an absolute preference, need no key. Resubmitting a failed leg is a new deliberate action and gets a new key.
 
-**Verification scenario:** Submit two identical orders while the first is held pending: two requests with distinct keys settle independently. Drop the first response: no second request is sent automatically.
+**Verification scenario:** Where the recorded decision allows overlap, submit two identical orders while the first is held pending: two requests with distinct keys settle independently. Drop the first response: no second request is sent automatically.
 
 **Automatable check:** Lint that the key factory runs only in event handlers or mutation call sites.
 
@@ -1097,7 +1097,7 @@ await storage.set(pendingKey, intent); if (!saved) throw trackingUnavailable() /
 validate(intent, account); showOutcome(await submit(intent, key)) // reads and streams settle the view
 ```
 
-**Legitimate exceptions:** A persisted cross-tab lock is at most a temporary stopgap for fail-open backend idempotency (see execution-read-backend-idempotency-contract-first). An in-memory critical section for a multi-step protective-order edit is not a persisted claim.
+**Legitimate exceptions:** A persisted cross-tab lock is at most a temporary stopgap for fail-open backend idempotency, with explicit owner acceptance and a removal ticket (see execution-read-backend-idempotency-contract-first). An in-memory critical section for a multi-step protective-order edit is not a persisted claim.
 
 **Verification scenario:** Make storage throw, remove the Web Lock API and seed corrupt saved state: a valid order still dispatches exactly once. Lose the response and reload: nothing is resubmitted and the order appears from authoritative reads.
 
@@ -1313,13 +1313,13 @@ Pack: `execution` (candidate). Topics: `frontend`, `mutations`, `execution`, `te
 
 ## Claim idempotency keys atomically and fail closed
 
-Scope the key by user and endpoint, hash a canonical serialization of the parsed payload, and claim the key with a pending record through one atomic set-if-absent with expiry before the handler runs. The claim TTL must outlive any request, at least four times the request timeout, and a finished success is stored with its status and body for a bounded replay window. A losing claimant gets the stored result, 409 for a different payload or a still-pending claim (with Retry-After), and 503 when the store cannot answer. Refines core card end-to-end-idempotency-and-integrity.
+Scope the key by user and endpoint, hash a canonical serialization of the parsed payload, and claim the key with a pending record through one atomic set-if-absent with expiry before the handler runs. The claim TTL must outlive any request, at least four times the request timeout, and a finished success is stored with its status and body for a bounded replay window. A losing claimant gets the stored result, 409 for a different payload or a still-pending claim (with Retry-After), and 503 when the store cannot answer. Refines core card end-to-end-idempotency-and-integrity. Pack card execution-read-backend-idempotency-contract-first is the client-side reading of this contract.
 
 **Apply when:** a backend handler for orders, transfers or other consequential writes accepts an idempotency key, or a middleware is chosen to provide one.
 
 **Boundary notes:** The payload hash binds the client key to its first payload; it is never the dedupe key, so identical genuine orders with different keys both execute. Require the key where a retry could repeat a fan-out.
 
-**Checks:** a claim that expired between the lost race and the read counts as in flight, not free; only 2xx results are stored and an error releases the claim, so the handler must not error after a side effect (see execution-no-whole-request-error-after-effect); a failed result write is alerted, because the key becomes runnable again when the claim expires; replay returns the stored status and body verbatim.
+**Checks:** a claim that expired between the lost race and the read counts as in flight, not free; only 2xx results are stored and an error releases the claim, so the handler must not error after a side effect (see execution-no-whole-request-error-after-effect); a failed result write is alerted, because the key becomes runnable again when the claim expires; the handler finishes within an internal deadline below the request timeout, so a request cancelled after its side effect cannot leave a pending claim that later runs again; replay returns the stored status and body verbatim.
 
 **Anti-pattern:** Check-then-set in two calls, run the handler when the store is unreachable, or accept a key not bound to its payload.
 
@@ -1479,7 +1479,7 @@ Pack: `execution` (candidate). Topics: `backend`, `distributed`, `lifecycle`, `e
 
 ## Journal the signed transaction before broadcasting it
 
-Persist what a broadcast will leave behind before sending it: for EVM the nonce, hash and raw signed bytes; for Solana the signature and last valid block height; for a venue action the signed payload and its nonce. Resuming is calling the step again: a journaled step checks for a receipt, re-sends the identical bytes (same hash, so nodes deduplicate) and rebuilds only once the original can no longer land, because its blockhash expired or a preflight rejection proved it never entered the network.
+Persist what a broadcast will leave behind before sending it: for EVM the nonce, hash and raw signed bytes; for Solana the signature and last valid block height; for a venue action the signed payload and its nonce. Resuming is calling the step again: a journaled step checks for a receipt, re-sends the identical bytes (same hash, so nodes deduplicate) and rebuilds only once the original provably cannot land: its blockhash or deadline has expired by the chain's own clock and its signature or hash is absent. An "already processed" answer means it landed. A preflight rejection proves only that this one send was not forwarded; an earlier copy may still be live.
 
 **Apply when:** a backend signs and broadcasts transactions or venue actions inside a workflow that can crash, restart or retry.
 
@@ -1503,9 +1503,9 @@ onResume: const tx = sign(build(step)); send(tx)
 onResume: const j = journal[step]; if (j) return (await receipt(j.hash)) ?? rebroadcast(j.raw); else { const s = sign(build(step)); await persist(s); send(s.raw) }
 ```
 
-**Legitimate exceptions:** Pure read or polling steps (attestation, fill status) need no journal; they re-check by id. A venue that rejects a reused nonce turns a byte-identical resend into a definite answer.
+**Legitimate exceptions:** Pure read or polling steps (attestation, fill status) need no journal; they re-check by id. A venue that rejects a reused nonce turns a byte-identical resend into a definite answer. A first and only attempt from a client that never resends may rebuild after a preflight rejection.
 
-**Verification scenario:** Kill the worker after the journal write but before the send, and again after the send: each resume yields exactly one on-chain transaction. Expire a Solana blockhash: the resume rebuilds once.
+**Verification scenario:** Kill the worker after the journal write but before the send, and again after the send: each resume yields exactly one on-chain transaction. Expire a Solana blockhash with the signature absent: the resume rebuilds once. Answer a resend with blockhash-not-found from a lagging node while the original is live: no rebuild.
 
 Pack: `execution` (candidate). Topics: `backend`, `chain`, `signing`, `execution`, `implementation`.
 
@@ -1513,11 +1513,11 @@ Pack: `execution` (candidate). Topics: `backend`, `chain`, `signing`, `execution
 
 ## Settle only on an observed chain receipt
 
-A send that returns OK is not settlement: an accepted send with an unmoved nonce was never in the mempool. Confirm from the chain against a baseline captured before the send (block height lower bound, pre-send balance), require a successful receipt, measure the credited amount from the receipt's own transfer logs to the recipient, and verify the intended state change happened. Zero credit is a fault, and downstream legs spend the measured amount, never a quoted or reported figure.
+A send that returns OK is not settlement: an accepted send with an unmoved nonce was never in the mempool. Confirm from the chain against a baseline captured before the send (block height lower bound, pre-send balance), require a successful receipt, measure the credited amount from transfer logs emitted by the expected token contract, net of transfers out of the recipient in the same transaction, and verify the intended state change happened. Zero credit is a fault, and downstream legs spend the measured amount, never a quoted or reported figure.
 
 **Apply when:** a step advances a workflow, credits a user or sizes the next leg after a transaction or bridge fill.
 
-**Checks:** the baseline is captured before sending; a reverted receipt fails the step; the credited amount derives purely from the receipt, so a resume re-derives the same value; zero net credit raises an error; the transaction hash is recorded before any amount check that can fail, so the record never denies a real transfer; delegations and approvals are verified by reading resulting state, since a mined transaction can be a silent no-op; replica lag after a receipt is bounded by a deadline.
+**Checks:** the baseline is captured before sending; a reverted receipt fails the step; the credited amount derives purely from the receipt and ignores logs from any other emitter, so a resume re-derives the same value; zero net credit raises an error; the transaction hash is recorded before any amount check that can fail, so the record never denies a real transfer; delegations and approvals are verified by reading resulting state, since a mined transaction can be a silent no-op; replica lag after a receipt is bounded by a deadline.
 
 **Anti-pattern:** Mark a step done when the RPC accepts the transaction or a provider reports a fill.
 
@@ -1532,7 +1532,7 @@ await rpc.send(tx); step.done = true; next.amountIn = quote.amountOut
 **Better example (illustrative):**
 
 ```text
-const r = await waitReceipt(hash); requireSuccess(r); const got = creditedTo(r, recipient); if (got === 0n) fail(); next.amountIn = got
+const r = await waitReceipt(hash); requireSuccess(r); const got = netCredit(r, token, recipient); if (got === 0n) fail(); next.amountIn = got
 ```
 
 **Legitimate exceptions:** A third-party status may signal progress or completion where no chain-observable credit exists, but amounts used downstream still come from chain reads. Reporting-only deltas may be approximate if documented.
@@ -1549,7 +1549,7 @@ Senders sharing a wallet keep per-wallet nonce state (next plus a sorted free li
 
 **Apply when:** several replicas or routes sign from one wallet, or a resume must decide whether a journaled transaction was displaced.
 
-**Boundary notes:** Classify each send rejection by what it proves, and verify exact error strings for your node and client: too low means consumed, so resync forward without freeing; already known or underpriced means occupied, so discard without freeing; a rejection proving the transaction never entered frees the nonce. A single writer can serialize build, send and confirm under one lock instead.
+**Boundary notes:** Classify each send rejection by what it proves, and verify exact error strings for your node and client: too low means consumed, so resync forward without freeing; already known or underpriced means occupied, so discard the new send without freeing the nonce and keep waiting for the original's receipt, never marking it failed; a rejection proving the transaction never entered frees the nonce. A single writer can serialize build, send and confirm under one lock instead.
 
 **Checks:** no client library caches a nonce advanced by a fill whose send never happened; an account nonce is consumed even by a mined revert, while an in-contract replay nonce is not; the dead verdict runs only after a bounded receipt re-poll; RPC behind a load balancer is assumed to lag.
 
@@ -1583,7 +1583,7 @@ A new execution path (third-party router, venue adapter or engine) gets a per-pr
 
 **Apply when:** a change adds a provider, router, venue or executor that will move user funds, or widens which calldata may execute.
 
-**Boundary notes:** The guard bounds blast radius, not price: allowlisted call target and approval spender, native value exactly the swap's spend or zero, chain id echo, pinned output decimals, non-zero output, and a floor neither inverted nor looser than the request's slippage. Soak length and promotion criteria are owner decisions; record them.
+**Boundary notes:** The guard bounds blast radius, not price: allowlisted call target and approval spender, native value exactly the swap's native spend (zero for token-in), chain id echo, pinned output decimals, non-zero output, and a floor neither inverted nor looser than the request's slippage. Soak length and promotion criteria are owner decisions; record them.
 
 **Checks:** default mode is off; shadow results are compared with the incumbent (improvement and rejection metrics); any guard rejection in shadow is an adapter bug that restarts the soak; upgradeable targets, unpinned contracts and unbounded approvals have a named owner's decision before live; rollout flips one provider on one chain first; the kill switch is exercised.
 
@@ -1719,7 +1719,7 @@ Pack: `money` (candidate). Topics: `money`, `frontend`, `backend`, `implementati
 
 ## Type backend money as a decimal string contract
 
-Backend money uses one shared decimal newtype, never binary floats: JSON carries it as a decimal string (schema type string, format decimal), and binary or analytical encodings use one fixed scale so readers agree on the mantissa. Arithmetic that can overflow or divide by zero is checked and returns an absent value; untrusted floats convert once through a fallible constructor. Where storage has tighter bounds, saturate with a counter and a warning instead of wrapping, panicking or decoding to zero.
+Backend money uses one shared decimal newtype, never binary floats: JSON carries it as a decimal string (schema type string, format decimal), and binary or analytical encodings use one fixed scale so readers agree on the mantissa. Arithmetic that can overflow or divide by zero is checked and returns an absent value; untrusted floats convert once through a fallible constructor. Where an analytics store has tighter bounds, saturate with a counter and a warning instead of wrapping, panicking or decoding to zero; an authoritative ledger rejects the write instead.
 
 **Apply when:** adding a DTO, event or row field for a price, amount, fee or PnL, writing a percent or ratio helper, or changing a column's precision.
 
@@ -1827,7 +1827,7 @@ Pack: `money` (candidate). Topics: `money`, `components`, `frontend`, `implement
 
 ## Keep amount inputs as raw decimal strings
 
-An amount field owns a raw string, not a number: it preserves partial input ("0.", "1.0", "-"), normalizes a decimal comma and the Unicode minus sign, refuses keystrokes beyond the asset's decimals, and passes the validated string to submission unchanged. Formatted, grouped (1,234) or compacted (10K) text is display output and never re-enters a payload. A Max button writes the exact balance string floored to input precision, never a formatted label.
+An amount field owns a raw string, not a number: it preserves partial input ("0.", "1.0", "-"), normalizes the Unicode minus sign, caps fraction digits at the asset's decimals, and passes the validated string to submission unchanged, so the value the field shows is the value submitted. Which separators are accepted is a locale and product decision to source; ambiguous input, such as a comma followed by exactly three digits, is rejected with a reason rather than guessed. Formatted, grouped or compacted (10K) text is display output and never re-enters a payload. A Max button writes the exact balance string floored to input precision, never a formatted label.
 
 **Apply when:** building or editing an amount, price or size input, a Max or percentage button, or the code that turns form state into a mutation payload.
 
@@ -1837,7 +1837,7 @@ An amount field owns a raw string, not a number: it preserves partial input ("0.
 
 **Anti-pattern:** Bind the field to a number re-rendered from parseFloat, or fill it from the formatted balance label.
 
-**Why it fails:** "1." collapses to "1" mid-typing and "0.10" loses its zero; comma or Unicode-minus input from some keyboards becomes NaN; digits beyond the asset's precision are silently truncated at conversion; "1.2K" or "$1,234.56" either fails to parse or submits the wrong amount.
+**Why it fails:** "1." collapses to "1" mid-typing and "0.10" loses its zero; Unicode-minus input from some keyboards becomes NaN, and a guessed separator turns a pasted 1,234 into 1.234, an amount a thousand times smaller; digits beyond the asset's precision are silently truncated at conversion; "1.2K" or "$1,234.56" either fails to parse or submits the wrong amount.
 
 **Bad example (illustrative):**
 
@@ -1853,7 +1853,7 @@ value={raw}; onChange keeps digits and one dot capped at asset decimals; onMax s
 
 **Legitimate exceptions:** Grouping while typing is acceptable only when the stored value stays canonical and the design calls for it. Integer-only assets drop the decimal point entirely.
 
-**Verification scenario:** Type "0.", "1.0", ",5", a Unicode minus and digits past the asset's decimals, paste a grouped value, then press Max on a fee-bearing source; verify stable editing, capped digits, canonical payload strings and a Max that never exceeds the balance.
+**Verification scenario:** Type "0.", "1.0", a Unicode minus and digits past the asset's decimals, paste "1,234", then press Max on a fee-bearing source; verify stable editing, capped digits, the ambiguous paste rejected with a reason, the shown value equal to the payload string and a Max that never exceeds the balance.
 
 Pack: `money` (candidate). Topics: `money`, `forms`, `frontend`, `implementation`.
 
@@ -1901,7 +1901,7 @@ A quote is usable only for the exact route and input amount it priced, and only 
 
 **Apply when:** a form shows a receive amount, rate or fee from a quote endpoint, or a submit handler builds an order from a quote.
 
-**Boundary notes:** superseded renders like pending, not as an error. Refresh cadence and how expiry is shown to users are product decisions.
+**Boundary notes:** how superseded, refresh cadence and expiry are shown is a product decision; rendering superseded like pending rather than as an error is the usual choice.
 
 **Checks:** amounts compare as normalized decimals ("1.0" equals "1"); assets and route match; output and rate are positive; fees are non-negative; recommended slippage is an integer in range; expiry uses the clock's unit; submit re-resolves route and quote and blocks with a refetch on mismatch; the parser tolerates additive fields but rejects malformed required ones.
 
@@ -1999,7 +1999,7 @@ Pack: `money` (candidate). Topics: `quotes`, `money`, `frontend`, `backend`, `im
 
 ## Quote, approve, re-quote, then spend the approval
 
-When the submitting request consumes a one-shot approval (signature, passkey, second factor or permit), quote before asking for it, re-quote after it, and reconfirm on material change before spending it. A later failure enters the existing explicit recovery path, never a silent re-approval or resubmission. The server binds the approval to the exact intent (amount, route, recipient, quote), and allowance scope (exact or unlimited) is a security and product decision, not a code default. Refines core card authorization-single-use-intents.
+When the submitting request consumes a one-shot approval (signature, passkey, second factor or permit), quote before asking for it, re-quote after it, and reconfirm on material change before spending it. A later failure enters the existing explicit recovery path, never a silent re-approval or resubmission. The server binds the approval to the confirmed intent (amount, route, recipient and the confirmed floor or tolerance), not to one exact quote, so a fresh quote within tolerance can spend it; binding the exact quote means re-approval on every re-quote, a product decision, and allowance scope (exact or unlimited) is a security and product decision, not a code default. Refines core card authorization-single-use-intents. Pack card money-requote-material-tolerance defines the material-change test.
 
 **Apply when:** a flow collects an approval and then submits a withdrawal, swap or transfer, or a third party gains allowance over user funds.
 
@@ -2027,13 +2027,13 @@ await approve(terms); const fresh = await requote(); if (worsened(confirmed, fre
 
 **Verification scenario:** Approve, then return a worse re-quote, a failing re-quote and a submit error; verify reconfirmation, failure before dispatch and one submission with no second approval prompt; server-side, verify an approval replayed with other terms is rejected.
 
-Pack: `money` (candidate). Topics: `authorization`, `signing`, `frontend`, `backend`, `planning`.
+Pack: `money` (candidate). Topics: `authorization`, `quotes`, `frontend`, `backend`, `planning`.
 
 <a id="money-aggregator-calldata-guard"></a>
 
 ## Admit third-party swap calldata through one ordered guard
 
-Aggregator calldata is untrusted until one admission function, the only path to an executable plan, accepts it after fixed-order checks where the first failure wins. It bounds blast radius (what is called and approved, how much native value moves, how far the provider's numbers may go), not price; a ceiling against an in-house quote catches unit bugs. A swap paying anyone but the trader stays in-house: no guard can prove who third-party calldata pays. Refines core card types-boundary-validation.
+Aggregator calldata is untrusted until one admission function, the only path to an executable plan, accepts it after fixed-order checks where the first failure wins. It bounds blast radius (what is called and approved, how much native value moves, how far the provider's numbers may go), not price; a ceiling against an in-house quote catches unit bugs. A swap paying anyone but the trader stays in-house: no guard can prove who third-party calldata pays. Refines core card types-boundary-validation. The floor checks cover the floor the provider reports; enforcing the floor that actually executes needs calldata decoding or an on-chain check of the amount received, otherwise record the remaining price risk.
 
 **Apply when:** integrating an aggregator or solver that returns calldata, a spender or a min-out, or adding a provider or chain.
 
@@ -2043,7 +2043,7 @@ Aggregator calldata is untrusted until one admission function, the only path to 
 
 **Anti-pattern:** Execute the best-quoting provider's calldata, trusting its own spender, value and min-out fields.
 
-**Why it fails:** A buggy or compromised provider can name any spender, attach native value, encode a loose floor or quote in the wrong units so an absurd quote wins; one unchecked field drains an allowance or sells at any price.
+**Why it fails:** A buggy or compromised provider can name any spender, attach native value or quote in the wrong units so an absurd quote wins; one unchecked field drains an allowance or sells at any price.
 
 **Bad example (illustrative):**
 
@@ -2067,7 +2067,7 @@ Pack: `money` (candidate). Topics: `execution`, `security`, `contracts`, `backen
 
 ## Preflight every plan before it spends a nonce
 
-Estimate gas or simulate each candidate transaction before allocating a nonce, from the real signer and including any approve the batch carries, so the estimate sees the allowance it grants. A plan that would revert, or whose resized gas budget the wallet cannot fund, hands the swap to the next ranked plan, which proves its own headroom and carries its own approval; only an exhausted list fails. Submit with the larger of the plan's budget and the estimate plus a configured margin.
+Estimate gas or simulate each candidate transaction before allocating a nonce, from the real signer and including any approve the batch carries, so the estimate sees the allowance it grants; an approve sent separately needs a state override or a mined approval before estimating. A plan that would revert, or whose resized gas budget the wallet cannot fund, hands the swap to the next ranked plan, which proves its own headroom and carries its own approval; only an exhausted list fails. Submit with the larger of the plan's budget and the estimate plus a configured margin.
 
 **Apply when:** an executor signs swaps or transfers on an EVM chain, especially with external calldata, batched approve-and-trade, or provider-supplied gas numbers.
 
@@ -2077,7 +2077,7 @@ Estimate gas or simulate each candidate transaction before allocating a nonce, f
 
 **Anti-pattern:** Sign and broadcast the provider's transaction with its own gas number and discover the revert on chain.
 
-**Why it fails:** A reverting transaction still burns the nonce and gas, stalls the wallet's queue and fails a routable order; provider estimates under-size fee-on-transfer tokens, which then revert as an opaque transfer failure, not out-of-gas.
+**Why it fails:** A reverting transaction still consumes the nonce, burns gas and fails an order another plan could have filled; provider estimates under-size fee-on-transfer tokens, which then revert as an opaque transfer failure, not out-of-gas.
 
 **Bad example (illustrative):**
 
@@ -2137,7 +2137,7 @@ Pack: `money` (candidate). Topics: `execution`, `errors`, `backend`, `implementa
 
 ## Judge token sellability by what the sell reads
 
-Decide whether a token can be exited by executing buy, approve and sell from the real signing wallet against state pinned to one block, not by finding an owner. The durable signal is the sell path's storage read set minus what the buy and approve wrote: any remaining slot is a lever someone can flip, whoever holds it. Unresolved results are a score input, not a pass, and new gates run in shadow (consulted and metered, refusing nothing) until measured.
+Decide whether a token can be exited by executing buy, approve and sell from the real signing wallet against state pinned to one block, not by finding an owner. The durable signal is the sell path's storage read set minus what the buy and approve wrote: any remaining slot is a lever someone can flip, whoever holds it. It covers only the branches the probe executed, so a check gated on trade size or caller stays invisible: probe at several sizes and from several callers, and treat the read set as a floor, never proof of safety. Unresolved results are a score input, not a pass, and new gates run in shadow (consulted and metered, refusing nothing) until measured.
 
 **Apply when:** building or changing honeypot or sell-tax detection, token risk scores, or pre-trade simulation that gates or labels trades.
 
@@ -2163,7 +2163,7 @@ const levers = sellReads(pinned, signer).minus(writes(buy, approve)); score({ le
 
 **Legitimate exceptions:** A simulation binds its block; an owner can arm a trap after inclusion, so it reduces risk rather than removing it.
 
-**Verification scenario:** Run fixtures for a plain token, a toggle-gated sell, a hard-coded admin, a time-gated sell, a blocklisted signer and an empty pool; verify levers on gated tokens, refusal for the blocklisted signer, a depth flag, and an "unresolved" score distinct from "clean".
+**Verification scenario:** Run fixtures for a plain token, a toggle-gated sell, a hard-coded admin, a time-gated sell, a size-gated sell, a blocklisted signer and an empty pool; verify levers on gated tokens, refusal for the blocklisted signer, a depth flag, and an "unresolved" score distinct from "clean".
 
 Pack: `money` (candidate). Topics: `security`, `contracts`, `chain`, `backend`, `review`.
 
@@ -2207,7 +2207,7 @@ Pack: `operations` (candidate). Topics: `release`, `operations`, `data`, `backen
 
 ## Report readiness only when the service can work
 
-Readiness means this instance can do its job now: false until boot catch-up finishes, required inputs are primed and every listener and consumer is bound; false again when its input feed stalls or shutdown begins, so load balancers drain first. Liveness is separate and one-way: trip it at once on a dead worker, or on sustained non-readiness only after the instance has been ready, never during a long catch-up. Probes read in-memory flags that a service-owned loop computes.
+Readiness means this instance can do its job now: false until boot catch-up finishes, required inputs are primed and every listener and consumer is bound; false again when its input feed stalls or shutdown begins, so load balancers drain first. Liveness is separate and one-way: trip it only for a local, unrecoverable wedge, such as a dead worker or a loop making no progress while input is available. Dependency failures and upstream outages surface through readiness and request errors, never liveness, so one outage does not restart every replica at once. Probes read in-memory flags that a service-owned loop computes.
 
 **Apply when:** Adding a service or consumer, a long startup phase, or a dependency the service cannot work without.
 
@@ -2215,25 +2215,25 @@ Readiness means this instance can do its job now: false until boot catch-up fini
 
 **Checks:** The probe server binds before long staging work, so a download is not mistaken for a dead process; ready is never set while a listener or consumer bind can still fail; staleness is computed off the probe path; metrics use their own port; consumer idle heartbeats and reopen behavior are set deliberately so a stalled pull consumer surfaces instead of sitting silent; shutdown handles SIGTERM.
 
-**Anti-pattern:** Mark ready as soon as the process starts and ping dependencies inside the probe handler.
+**Anti-pattern:** Mark ready as soon as the process starts, ping dependencies inside the probe handler, or fail liveness because a dependency is down.
 
-**Why it fails:** Traffic reaches an instance that is still catching up or deaf, users get stale data while health is green, and probe-time pings turn a dependency blip into a restart storm.
+**Why it fails:** Traffic reaches an instance that is still catching up or deaf, users get stale data while health is green, and dependency-driven probes turn a blip into a restart storm across every replica.
 
 **Bad example (illustrative):**
 
 ```text
-ready = true at boot; the readiness handler awaits a database ping before consumers attach
+ready = true at boot; the liveness handler fails whenever a database ping times out
 ```
 
 **Better example (illustrative):**
 
 ```text
-Start the probe first, mark ready after catch-up and binds, flip readiness from a staleness loop, trip liveness only on settled failure.
+Start the probe first, mark ready after catch-up and binds, flip readiness from a staleness loop, and fail liveness only on a local wedge.
 ```
 
-**Legitimate exceptions:** A stateless request service may mark ready at startup and leave dependency failure to liveness, if documented. Stall thresholds are ops decisions.
+**Legitimate exceptions:** A stateless request service with no warm-up may mark ready once its listener binds and report dependency failures as request errors, if documented. Stall thresholds are ops decisions.
 
-**Verification scenario:** Silence the feed past the threshold: readiness flips false and recovers without a restart; kill a worker: liveness trips; boot with a long catch-up: no restart.
+**Verification scenario:** Silence the feed past the threshold: readiness flips false and recovers without a restart; stop a dependency: no pod restarts; wedge a worker: liveness trips; boot with a long catch-up: no restart.
 
 **Automatable check:** A lint banning SIGINT-only signal helpers, and an integration test asserting ready stays false until catch-up ends.
 
@@ -2243,7 +2243,7 @@ Pack: `operations` (candidate). Topics: `operations`, `lifecycle`, `backend`, `f
 
 ## Ship every alert with a runbook and permission level
 
-An alert rule ships with a human runbook link, a stable runbook slug, a severity and an automation permission: safe (an agent may run the listed remediation), unsafe (diagnose and report only) or none (informational). Anything missing from the registry defaults to unsafe. Routing is a tree where only production plus critical reaches the pager, so an alert missing its environment label can never page.
+An alert rule ships with a human runbook link, a stable runbook slug, a severity and an automation permission: safe (an agent may run the listed remediation), unsafe (diagnose and report only) or none (informational). Anything missing from the registry defaults to unsafe. Routing is a tree where only production plus critical reaches the pager, so an alert missing its environment label can never page; lint required labels so that failure is not silent.
 
 **Apply when:** Adding or changing an alert, wiring automated diagnosis or remediation, or adding a telemetry dimension.
 
@@ -2271,7 +2271,7 @@ Confirmed production integrity failures page with a runbook; warnings go to a vi
 
 **Verification scenario:** Fire a test alert without the production label: it never pages. Fire one missing from the registry: automation only diagnoses.
 
-**Automatable check:** A CI lint that every alert rule has a slug present in the automation registry and a resolvable runbook link.
+**Automatable check:** A CI lint that every alert rule carries environment and severity labels, a slug present in the automation registry and a resolvable runbook link.
 
 Pack: `operations` (candidate). Topics: `operations`, `errors`, `backend`, `frontend`, `planning`.
 
@@ -2279,11 +2279,11 @@ Pack: `operations` (candidate). Topics: `operations`, `errors`, `backend`, `fron
 
 ## Rate limit at the edge with explicit failure posture
 
-Count requests with a sliding two-window estimate (current count plus the previous window weighted by its remaining share) so a burst cannot straddle a boundary. Key anonymous traffic by the client IP from the rightmost forwarded-for entry your own ingress appended, never the leftmost, and key money-moving categories per user. Decide failure posture per control: if the shared counter store is down, rate limiting fails open, new authentication fails closed, and money-moving actions that must never run unmetered fail closed.
+Count requests with a sliding two-window estimate (current count plus the previous window weighted by its remaining share), which smooths the double burst a fixed window allows at its boundary. Key anonymous traffic by the client IP from the rightmost forwarded-for entry your own ingress appended, never the leftmost, and key money-moving categories per user. Decide and document failure posture per control for when the shared counter store is down: rate limiting usually fails open so a store outage does not stop all traffic, while new authentication fails closed. Whether a money-moving category fails closed is an owner or money-policy decision to source; a common choice fails closed only for actions that pay out.
 
 **Apply when:** Adding an endpoint category, touching proxy or IP extraction, adding a maintenance switch, or handling 429s in a client.
 
-**Boundary notes:** A maintenance switch blocks writes only (503), keeps reads up so balances and charts stay visible, and leaves its admin path writable so it can be turned off.
+**Boundary notes:** Maintenance behavior is a product decision; a common choice blocks writes only (503), keeps reads up so balances and charts stay visible, and leaves its admin path writable so it can be turned off.
 
 **Checks:** Credential-accepting routes get the tightest cap; trusted internal services skip per-IP caps only with a verified service credential; responses carry limit, remaining, reset and Retry-After; the trusted hop count matches the real proxy chain; clients honor Retry-After, bound read retries and never auto-retry a mutation.
 
@@ -2305,7 +2305,7 @@ ip = the rightmost entry our ingress appended (else the socket peer); orders and
 
 **Legitimate exceptions:** Behind several trusted proxies, take the entry at the trusted hop count from the right. Caps per category are ops and product decisions; source them.
 
-**Verification scenario:** Send a forged leftmost header: the bucket follows the real hop. Stop the counter store: reads pass, a new login fails, a money-moving claim fails closed.
+**Verification scenario:** Send a forged leftmost header: the bucket follows the real hop. Stop the counter store: reads pass, a new login fails, and each money-moving category follows its documented posture.
 
 **Automatable check:** Unit tests for IP extraction with forged headers, plus a regression test replaying the header-spoof bypass.
 
@@ -2313,11 +2313,11 @@ Pack: `operations` (candidate). Topics: `security`, `operations`, `backend`, `fr
 
 <a id="operations-independent-source-correctness"></a>
 
-## Verify data against independent sources nightly
+## Verify data against independent sources on a schedule
 
 A scheduled checker compares published data with independent sources (the chain itself, two or more external providers) and with self-consistency recomputations such as candles re-aggregated from trades. A field fails only when the independent sources agree with each other but disagree with you; a single external source can at most warn. The exit contract separates check failed from could not run, and a missing dependency reports skip, never a silent pass. Refines core card operations-audit-and-restore.
 
-**Apply when:** Publishing derived market, position or balance data, adding a decoder for a new protocol, or wiring a nightly data-quality job.
+**Apply when:** Publishing derived market, position or balance data, adding a decoder for a new protocol, or wiring a scheduled data-quality job.
 
 **Boundary notes:** Never compare against a proxy of the same provider; that is circular evidence. Self-consistency checks catch pipeline bugs, not shared upstream errors.
 
@@ -2387,7 +2387,7 @@ Pack: `operations` (candidate). Topics: `review`, `testing`, `modules`, `fronten
 
 ## Split release preparation from production authority
 
-An engineer prepares a reviewable release PR that changes only version and changelog; after merge, a designated release manager creates an immutable version tag on that PR's exact merge SHA, never the moving tip of main. Before deploy credentials are used, a validator checks tag format, tagger identity, the merged release PR and the exact SHA. Tags are never moved or deleted: a failed rollout re-runs the same run, and rollback is a revert plus a new patch release.
+An engineer prepares a reviewable release PR that changes only version and changelog; after merge, a designated release manager creates an immutable version tag on that PR's exact merge SHA, never the moving tip of main. Before deploy credentials are used, a validator checks tag format, tagger identity, the merged release PR and the exact SHA. Tags are never moved or deleted. A failed rollout may re-run the same run only while that tag is still the intended production version; once a newer release has shipped, rollback is a revert plus a new patch release, because re-running an older tag puts old code back. See pack card operations-roll-forward-schema-gated-release.
 
 **Apply when:** Designing release workflows, cutting a patch, handling a failed production deploy, or editing release documentation.
 
@@ -2413,7 +2413,7 @@ Tag v1.4.0 at the release PR merge SHA; for a bad release, revert on main and ta
 
 **Legitimate exceptions:** A single-maintainer project may combine roles if the tag still pins an exact reviewed SHA. Who holds release authority is an organizational decision.
 
-**Verification scenario:** Push a tag as a non-manager and try to move an existing tag: both are rejected; a tag on a non-release SHA fails validation before any deploy step.
+**Verification scenario:** Push a tag as a non-manager and try to move an existing tag: both are rejected; a tag on a non-release SHA fails validation before any deploy step; re-running an older tag's deploy after a newer release shipped is refused.
 
 **Automatable check:** A pre-deploy job validating tag format, tagger identity and merge SHA, plus a docs check that referenced workflow files exist.
 
@@ -2459,35 +2459,35 @@ Pack: `operations` (candidate). Topics: `release`, `operations`, `backend`, `pla
 
 ## Keep previews and deploys current, scoped and coupled
 
-Decide whether a PR needs a preview from its file list via the API before checking out untrusted PR code, skipping docs- or tests-only changes, and treat a truncated file list as needing one. Deploy credentials live only in the deploy job, never in the validation runner. A main-branch deploy re-checks that main has not moved before build, deploy and alias, and stops if it has. Surfaces that must match (an app and its auth surface) are coupled through a published build ref, and the deploy refuses on mismatch.
+Previews that need deploy credentials run only for trusted PRs: same repository, not draft, not from a bot. Untrusted code is built in an unprivileged job, and a separate privileged job deploys the resulting artifact without running PR code. Checking the PR file list through the API before checkout is a cost control that skips docs- or tests-only previews, not a security boundary; treat a truncated file list as needing a preview. A main-branch deploy re-checks that main has not moved before build, deploy and alias, and stops if it has. Surfaces that must match (an app and a separately deployed sign-in app) are coupled through a published build ref, and the deploy refuses on mismatch.
 
 **Apply when:** Editing CI or CD workflows, adding a deploy target, or adding a second surface with a version dependency.
 
 **Boundary notes:** The CI build used for browser tests embeds mocks and test endpoints and is never the deployable artifact; the deployable build is made against the real environment and smoke-tested without rebuilding.
 
-**Checks:** Forks, drafts and bot PRs never receive secrets; validation checkouts do not persist credentials; required production build variables fail the build when missing; build output is validated before deploy; preview concurrency is per PR and production is serialized; smoke tests hit real routes after deploy.
+**Checks:** Untrusted PRs never reach a job holding secrets, either through trust gating or an unprivileged build job; validation checkouts do not persist credentials; required production build variables fail the build when missing; build output is validated before deploy; preview concurrency is per PR and production is serialized; smoke tests hit real routes after deploy.
 
-**Anti-pattern:** Build PR code inside a job that holds deploy tokens, or deploy whatever commit the run started with.
+**Anti-pattern:** Build untrusted PR code inside a job that holds deploy tokens, or deploy whatever commit the run started with.
 
 **Why it fails:** A malicious or careless PR can exfiltrate tokens, and an older run can overwrite a newer deploy and point a shared alias at stale code.
 
 **Bad example (illustrative):**
 
 ```text
-On a PR event, check out the PR head and build it with the deploy token in the environment.
+On every pull_request event, forks included, check out the PR head and build it with the deploy token in the environment.
 ```
 
 **Better example (illustrative):**
 
 ```text
-List PR files via the API, skip when only safe paths changed, build in the deploy job, and re-check the main SHA before deploy and alias.
+Gate secret-holding previews to same-repository non-draft PRs, skip docs-only diffs via the API, and re-check the main SHA before deploy and alias.
 ```
 
-**Legitimate exceptions:** Repos without outside contributors may relax the pre-checkout step but should keep secret scoping. Which paths count as safe is a team decision.
+**Legitimate exceptions:** A repository whose contributors all have write access may build and deploy previews in one trusted job, provided fork and bot PRs never reach it. Which paths count as safe to skip is a team decision.
 
-**Verification scenario:** Merge two PRs in quick succession: the first run skips its deploy or alias once main moves. Open a docs-only PR: no preview job checks out code.
+**Verification scenario:** Open a PR from a fork: no job holding deploy secrets runs its code. Merge two PRs in quick succession: the first run skips its deploy or alias once main moves.
 
-**Automatable check:** A workflow lint asserting secrets appear only in deploy jobs and that main deploys re-check the ref before aliasing.
+**Automatable check:** A workflow lint asserting that jobs holding deploy secrets are gated to trusted PR sources and that main deploys re-check the ref before aliasing.
 
 Pack: `operations` (candidate). Topics: `release`, `security`, `web-app`, `frontend`, `implementation`.
 
@@ -2555,7 +2555,7 @@ run_e2e = changed paths match the risky-folders list
 run_e2e = not (every changed path matches the safe allowlist); the critical floor always runs.
 ```
 
-**Legitimate exceptions:** Docs-only PRs can skip browser suites. Do not grow the floor for cosmetic coverage; it exists for regressions that lose money or lock users out.
+**Legitimate exceptions:** Docs-only PRs can skip browser suites. A codebase without money-moving operations needs the floor but not the operation registry. Do not grow the floor for cosmetic coverage; it exists for regressions that lose money or lock users out.
 
 **Verification scenario:** Change a file outside any known pattern: selection runs. Rename a registry-mapped file: the mapping test fails. Pass an invalid diff range: the selector errors.
 
@@ -2571,7 +2571,7 @@ Define client fault scenarios as data: each has a load profile, an abort criteri
 
 **Apply when:** Changing retry, reconnect, polling, socket sharing, visibility or offline handling, or claiming a resilience improvement.
 
-**Boundary notes:** Typical scenarios: rate-limited reads, reconnect storms, multi-tab fan-out, rapid visibility changes, offline and online, malformed frame bursts, an unavailable data provider, and stale prices shown as estimates until a live quote returns.
+**Boundary notes:** Typical scenarios: rate-limited reads, reconnect storms, multi-tab fan-out, rapid visibility changes, offline and online, malformed frame bursts, an unavailable data provider, and stale prices while a live quote is pending (how stale values are presented is a product decision).
 
 **Checks:** Budgets sit tighter than the failure they guard (one socket per tab, zero mutations during read faults); diagnostics collapse into episodes by cooldown so a burst counts once; runs use a production build with deterministic mocks; stale data is never presented as live; recovery time runs from fault end to the visible recovered state.
 
@@ -2603,11 +2603,11 @@ Pack: `operations` (candidate). Topics: `testing`, `realtime`, `performance`, `f
 
 ## Open live coverage before the snapshot query
 
-A server channel that answers subscribe with a snapshot must hold live coverage before it reads: open the upstream and wait until it holds its stream, register the subscriber's routing entry, then run the snapshot query. A change committed during the query then arrives live instead of falling into the gap. For append-only feeds, record the identities the snapshot delivered and drop live items already in it, so the history/live seam never doubles. Refines core card realtime-snapshot-delta-contract.
+A server channel that answers subscribe with a snapshot must hold live coverage before it reads: open the upstream and wait until it holds its stream, register the subscriber's routing entry, then run the snapshot query. A change committed during the query then arrives live instead of falling into the gap. For append-only feeds, record the identities the snapshot delivered and drop live items already in it, so the history/live seam never doubles. For keyed state, live frames can reach the client before the snapshot, so the client orders rows by version (pack card realtime-version-ordered-frame-reducer) instead of letting the snapshot overwrite newer rows. Refines core card realtime-snapshot-delta-contract.
 
 **Apply when:** a subscribe handler reads initial rows and then attaches to a bus subject or vendor stream, or an upstream opens on the first subscriber and closes on the last.
 
-**Boundary notes:** the readiness wait runs on the socket's read loop, so bound it and count timeouts rather than stall every later frame. Channels that send nothing at subscribe need no seam.
+**Boundary notes:** the readiness wait runs on the socket's read loop, so bound it and count timeouts rather than stall every later frame, and decide what a timeout does: proceed without live coverage and say so, or fail the subscribe. Channels that send nothing at subscribe need no seam.
 
 **Checks:** the ready signal fires only after the upstream stream exists; routing is registered before the query; a failed snapshot unregisters the subscriber and fails the subscribe, never leaving a feed without a seam; the seam uses the same identity the client merges on; the last unsubscribe tears the upstream down.
 
@@ -2777,7 +2777,7 @@ key = event.dedupKey(); key ? retrySameId(publish, escapeInjective(route, key)) 
 
 **Automatable check:** a unit test over the id builder asserting no CR or LF in output and injectivity over adversarial key pairs.
 
-Pack: `realtime` (candidate). Topics: `distributed`, `mutations`, `backend`, `implementation`.
+Pack: `realtime` (candidate). Topics: `distributed`, `mutations`, `realtime`, `backend`, `implementation`.
 
 <a id="realtime-stream-positions-never-skip-work"></a>
 
@@ -2883,7 +2883,7 @@ rename the registry variant, review the generated diff, migrate every filter and
 
 **Automatable check:** the generator's check mode in CI plus a script asserting every filter and sink binding names a declared subject.
 
-Pack: `realtime` (candidate). Topics: `distributed`, `operations`, `boundaries`, `backend`, `planning`.
+Pack: `realtime` (candidate). Topics: `distributed`, `operations`, `realtime`, `backend`, `planning`.
 
 <a id="realtime-version-ordered-frame-reducer"></a>
 
@@ -2955,7 +2955,7 @@ one live owner writes positionsKey; refetchOnWindowFocus: false; settle from the
 
 **Automatable check:** an ESLint rule banning invalidation and writes on owned keys outside the owner, plus a script failing when any lint files, ignores or allowlist entry matches zero files.
 
-Pack: `realtime` (candidate). Topics: `cache`, `state`, `query`, `frontend`, `review`.
+Pack: `realtime` (candidate). Topics: `cache`, `realtime`, `query`, `frontend`, `review`.
 
 <a id="realtime-snapshot-and-ack-latch"></a>
 
@@ -3029,7 +3029,7 @@ Pack: `realtime` (candidate). Topics: `realtime`, `subscriptions`, `performance`
 
 ## Validate socket payloads once at the transport
 
-Parse each inbound frame once at the transport (in the worker, before fan-out to tabs) against schemas generated from the server's published channel contract: envelopes tolerantly, payloads strictly per channel. A payload that fails validation still reaches its owning feature as an explicit rejection, so that feature's contract-failure and recovery policy runs; it is not a subscription error and cannot consume an ack. Consumers then trust the typed value instead of re-validating. Refines core card types-boundary-validation.
+Parse each inbound frame once at the transport (in the worker, before fan-out to tabs) against schemas generated from the server's published channel contract: envelopes tolerantly, payloads strictly per channel. A payload that fails validation still reaches its owning feature as an explicit rejection, so that feature's contract-failure and recovery policy runs; it is not a subscription error and cannot consume an ack. Consumers then trust the typed value instead of re-validating. Refines core card types-boundary-validation. Pack card contracts-strict-payload-tolerant-envelope covers discriminants and REST mappers.
 
 **Apply when:** adding a channel, regenerating channel types, writing a consumer that parses socket JSON itself, or changing what happens to a malformed frame.
 
@@ -3129,7 +3129,7 @@ useQuery({ queryKey, queryFn: () => fetchWithStreamBackstop(key), refetchInterva
 
 **Automatable check:** an ESLint rule requiring every refetchInterval to be false or an approved helper call.
 
-Pack: `realtime` (candidate). Topics: `query`, `performance`, `frontend`, `implementation`.
+Pack: `realtime` (candidate). Topics: `query`, `performance`, `realtime`, `frontend`, `implementation`.
 
 <a id="realtime-visibility-aware-batching"></a>
 
@@ -3199,7 +3199,7 @@ useLiveLease(resource, input) leasing by canonical key, with grace before dispos
 
 **Verification scenario:** acquire from hover, mount the page during grace and assert one subscription and no refetch; release all and assert abort, unsubscribe and cache removal after grace; switch account and assert no lease survives.
 
-Pack: `realtime` (candidate). Topics: `subscriptions`, `cache`, `lifecycle`, `frontend`, `implementation`.
+Pack: `realtime` (candidate). Topics: `subscriptions`, `cache`, `realtime`, `frontend`, `implementation`.
 
 <a id="realtime-gap-recovery-resume-or-resnapshot"></a>
 
@@ -3305,7 +3305,7 @@ Pack: `web-app` (candidate). Topics: `frontend`, `performance`, `query`, `realti
 
 ## Pass browser-owned scope to SSR as hints
 
-When the server must render a region whose scope lives in the browser (selected chains, filters, layout), persist one small versioned hint per feature in a cookie, validate it server-side, and fall back to the approved default for missing, malformed, oversized, old-version or other-identity values. The layout reads hints once per request through memoized readers and passes unawaited promises down; consumers use them only for SSR and the first hydration render, then browser state is authoritative. A hint shapes the first frame but never enables an action or grants access. Refines core card storage-versioned-boundary.
+When the server must render a region whose scope lives in the browser (selected chains, filters, layout), persist one small versioned hint per feature in a cookie, validate it server-side, and fall back to the approved default for missing, malformed, oversized, old-version or other-identity values. In a React Server Components app such as Next.js App Router, the layout reads hints once per request through memoized readers and passes unawaited promises down; consumers use them only for SSR and the first hydration render, then browser state is authoritative. A hint shapes the first frame but never enables an action or grants access. Refines core card storage-versioned-boundary.
 
 **Apply when:** a direct visit renders the wrong selection because the server cannot see local storage, or a diff writes isHydrated ? browserValue : serverValue.
 
@@ -3445,7 +3445,7 @@ Pack: `web-app` (candidate). Topics: `frontend`, `state`, `boundaries`, `types`,
 
 ## Evaluate client pages under server-only layouts
 
-Next.js 16 with Cache Components and partial prefetching prefetches one reusable shell per route that can carry session data but never URL data. A server page reading params or searchParams thus needs a per-URL server render at navigation, while a client page reads URL data in the browser so one shell serves every URL of the route. So pages become top-level client components that compose regions and unwrap params inside Suspense, while layouts are the only server components and start metadata, hints and critical reads unawaited. Evaluate it as an architectural choice against your router version and route mix.
+Next.js 16 with Cache Components and partial prefetching (verify both are stable in your version) prefetches one reusable shell per route that carries session data but not URL data, unless runtime prefetching resolves params per URL. A server page reading params or searchParams thus needs a per-URL server render at navigation, while a client page reads URL data in the browser so one shell serves every URL of the route. So pages become top-level client components that compose regions and unwrap params inside Suspense, while layouts are the only server components and start metadata, hints and critical reads unawaited. Evaluate it as an architectural choice against your router version and route mix.
 
 **Apply when:** planning routing for a Next.js 16 app with many dynamic routes, or reviewing a page that exports segment config, reads cookies or awaits params outside Suspense.
 
@@ -3515,7 +3515,7 @@ Pack: `web-app` (candidate). Topics: `frontend`, `query`, `components`, `perform
 
 ## Unmount hidden panels and return from cache
 
-Inactive tabs, closed panels, collapsed sections and drawers unmount when not shown instead of staying alive via force-mount, preserve-content tabs, display:none or hidden Activity boundaries. Instant return comes from the query cache and an admitted live owner: the region re-renders from cached entries and shows null-data surfaces only for scopes never loaded. The cost compounds because the framework already keeps several visited routes mounted but hidden for back navigation, multiplying every hidden region. Refines core card react-performance-evidence.
+Inactive tabs, closed panels, collapsed sections and drawers unmount when not shown instead of staying alive via force-mount, preserve-content tabs, display:none or hidden Activity boundaries. Instant return comes from the query cache and an admitted live owner: the region re-renders from cached entries and shows null-data surfaces only for scopes never loaded. The cost compounds where the router retains hidden routes (Next.js App Router keeps several visited routes mounted for back navigation), multiplying every hidden region. Refines core card react-performance-evidence.
 
 **Apply when:** a diff adds force-mount, preserve-content, display:none toggles or hidden Activity around data-bearing UI, or a hidden route still asserts request demand or holds subscriptions.
 
@@ -3585,7 +3585,7 @@ Pack: `web-app` (candidate). Topics: `frontend`, `state`, `cache`, `providers`, 
 
 ## Enforce module ownership with import-graph rules
 
-Make ownership mechanical: generate an import-graph rule per pair of feature modules forbidding runtime imports of another module's internals outside a few named public entry points (barrel, server readers, light shell hooks, lazy wrappers); forbid runtime cycles and lower layers importing the app layer; and commit a known-violations baseline so only new violations fail. Restricted-import lint rules give each sensitive cache one sanctioned writer and keep vendor SDKs (error reporting, analytics, wallets) behind their facade. Refines core card modules-public-contracts.
+Make ownership mechanical: generate an import-graph rule per pair of feature modules forbidding runtime imports of another module's internals outside a few named public entry points (barrel, server readers, light shell hooks, lazy wrappers); forbid runtime cycles and lower layers importing the app layer; and commit a known-violations baseline so only new violations fail. Restricted-import lint rules give each sensitive cache one sanctioned writer and keep vendor SDKs (error reporting, analytics, wallets) behind their facade. Refines core card modules-public-contracts. Pack card operations-ratchet-unfixable-rules covers the baseline mechanics.
 
 **Apply when:** a diff deep-imports another module, writes a shared cache from a new place, imports a vendor SDK directly, or wraps a dependency.
 
@@ -3621,7 +3621,7 @@ Pack: `web-app` (candidate). Topics: `frontend`, `modules`, `boundaries`, `cache
 
 ## Resolve UI concepts in a generated component map
 
-Keep a generated component map with one row per UI concept: the component to use, design-tool node ids, variant or duplicate relations, and known copies to fold in. Before creating a component, look up the concept and extend the mapped component instead of adding a parallel one; designed but unbuilt concepts go in the shared kit, not a feature. The map generator's --check mode fails on a stale doc, a second row for a mapped concept or component without a declared variant or duplicate relation, or a mapped export that no longer exists. Ratcheting scanners hold hardcoded radius and animation values: a committed allowlist of legacy occurrences, new ones fail, stale entries are reported.
+Keep a generated component map with one row per UI concept: the component to use, design-tool node ids, variant or duplicate relations, and known copies to fold in. Before creating a component, look up the concept and extend the mapped component instead of adding a parallel one; designed but unbuilt concepts go in the shared kit, not a feature. The map generator's --check mode fails on a stale doc, a second row for a mapped concept or component without a declared variant or duplicate relation, or a mapped export that no longer exists. Ratcheting scanners hold hardcoded radius and animation values: a committed allowlist of legacy occurrences, new ones fail, stale entries are reported. Pack card operations-ratchet-unfixable-rules covers the allowlist mechanics.
 
 **Apply when:** a diff adds a component file or non-trivial styled element, implements an unresolved design node, or copies a component into another module.
 

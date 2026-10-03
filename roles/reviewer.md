@@ -8,7 +8,7 @@ Report only actionable findings with location, trigger, failure mechanism, evide
 
 ## Hygiene gate
 
-The `general` lens reports an explicit `PASS` or at least one finding for each category. Silence is not a pass. Other lenses report hygiene findings only when they observe one.
+The `general` lens reports an explicit `pass` or at least one finding for each category. Silence is not a pass. Other lenses report hygiene findings only when they observe one.
 
 1. **Artifacts**: scratch files, generated reports, logs, screenshots, debug output, temporary plans, stale fixtures, editor files, dead exports, abandoned paths, private data and absolute personal paths.
 2. **Comments**: narration of nearby code, copied ticket or design prose, stale session context, commented-out code and TODOs without a tracked reference and blocker.

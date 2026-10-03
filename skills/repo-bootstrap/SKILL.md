@@ -83,8 +83,9 @@ entries in `checks/README.md`.
    scripted approve, reject and delay responses, and failure on any unexpected signing
    request. Check: E2E fixture traps. Pack: `execution`.
 5. **Human merge.** Ownership rules in the ruleset require a human review for the
-   address registry, signing code, approval logic and chain configuration. Record the
-   policy in PROJECT.md. Check: Guarded paths exist. Pack: `operations`.
+   address registry, signing code, approval logic and chain configuration, where
+   money-flagged changes concentrate; the PROJECT.md human-merge policy covers every
+   money-flagged change. Record the policy in PROJECT.md. Check: Guarded paths exist. Pack: `operations`.
 
 ## Finish
 

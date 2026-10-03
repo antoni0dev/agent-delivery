@@ -65,7 +65,7 @@ Paste the adapted table from `.agent-harness/templates/risk-routing.md` here, or
 - Permitted ticket creation/updates and scope:
 - Permitted branches, draft PR creation and development merges:
 - Required human review and CI policies:
-- Human-merge policy for money, address and signing changes (paths, required reviewers):
+- Human-merge policy for money-flagged changes, including address, signing and approval changes (paths, required reviewers; unfilled means every money-flagged change needs a human merge):
 - Does merging the destination trigger production deployment? If yes, record separate release authority or block that merge.
 - Release model (for example continuous on merge, release PR or tagged train) and release authority:
 - Approval: approve architecture, parallel scope and intended native session creation/coordination once, then execute within that authority. Record the explicit go and any native-tool or team-specific constraints in the initiative note.

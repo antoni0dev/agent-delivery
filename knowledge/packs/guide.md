@@ -3158,17 +3158,17 @@ Pack: `perps` (candidate). Topics: `perps`, `execution`, `mutations`, `frontend`
 
 ## Entry and attached protection are separate outcomes unless the venue groups them
 
-An entry with take-profit or stop-loss attached is several instructions. Prefer the venue native bracket or atomic group. Otherwise build and validate every leg before the entry leaves, send the entry, and place each reduce-only leg only once fill or position evidence shows exposure for it to protect; a resting entry without a native group shows its protection as pending. Settle each leg on its own as placed, failed or unknown, and report the overall result as success, partial or ambiguous with each leg named. Protection state shown on the position comes from the venue: a child can be pending its parent, armed, triggered, cancelled with its parent or gone.
+An entry with take-profit or stop-loss attached is several instructions. Prefer the venue native bracket or atomic group. Otherwise build and validate every leg before the entry leaves, send the entry, and place each reduce-only leg only once fill or position evidence shows exposure for it to protect. Where the venue has no native group, protection for a resting entry depends on this client observing the fill and is lost if the app closes first; whether to offer it, and how to say so, is a product decision to source, and the indicator never implies protection the venue does not hold. Settle each leg on its own as placed, failed or unknown, and report the overall result as success, partial or ambiguous with each leg named. Protection state shown on the position comes from the venue.
 
 **Apply when:** the ticket attaches take-profit or stop-loss to an entry, the venue takes legs separately or returns per-leg statuses, or the position row shows a protection indicator.
 
 **Boundary notes:** see perps-protection-replace-place-before-cancel for editing existing protection.
 
-**Checks:** legs are validated before dispatch: opposite side, reduce-only, size above zero and at most the entry size after lot rounding, trigger on the correct side of the wire entry price; a leg failure never runs the whole-trade error handler; only the failed leg can be retried, and only by the user; an unknown leg is worded as "may have been placed"; entry-only evidence never claims legs exist; the protection indicator follows the venue child state.
+**Checks:** legs are validated before dispatch: opposite side, reduce-only, size above zero and at most the entry size after lot rounding, trigger on the correct side of the wire entry price; a leg failure never runs the whole-trade error handler; only the failed leg can be retried, and only by the user; an unknown leg is worded as "may have been placed"; the protection indicator follows the venue child state.
 
 **Anti-pattern:** One mutation awaits the entry and then the protective orders, or fires them together, and reports a single success or failure.
 
-**Why it fails:** When a leg throws, the entry has already executed. "Trade failed" makes the user resubmit and double the exposure while holding an unprotected position they do not know about. "Order placed" makes them believe they are protected. Native children are commonly placed only once the parent fills completely and are cancelled with a partially filled parent, so "stop set" over a dormant child leaves an unprotected partial position.
+**Why it fails:** When a leg throws, the entry has already executed. "Trade failed" makes the user resubmit and double the exposure while holding an unprotected position they do not know about. Native children are commonly placed only once the parent fills completely and are cancelled with a partially filled parent, so "stop set" over a dormant child leaves an unprotected partial position.
 
 **Bad example (illustrative):**
 
@@ -3179,12 +3179,12 @@ await Promise.all([place(entry), place(takeProfit), place(stopLoss)]); toast('Or
 **Better example (illustrative):**
 
 ```text
-const legs = planLegs(entry); await place(entry); const outcomes = await placeEachOnExposure(legs) // pending | placed | failed | unknown
+const legs = planLegs(entry); await place(entry); const outcomes = await placeEachOnExposure(legs) // placed | failed | unknown
 ```
 
-**Legitimate exceptions:** A venue endpoint with all-or-nothing semantics for the whole group: one request and one outcome is correct. A venue that places proportional children per partial fill: follow its rule.
+**Legitimate exceptions:** A venue endpoint with all-or-nothing semantics for the whole group: one request and one outcome is correct.
 
-**Verification scenario:** Rest the entry: protection shows pending and no leg is sent. Fill it and reject the stop-loss: no "trade failed", the position is visible, the message says entry filled, take-profit placed, stop-loss not placed with the reason, and the retry submits only the stop-loss. Drop the take-profit response: "may have been placed". Fill the entry 40 percent then cancel it on a venue that cancels children with the parent: the position shows no active protection.
+**Verification scenario:** Rest the entry: no leg is sent and the indicator follows the sourced wording. Fill it and reject the stop-loss: no "trade failed", the position is visible, the message says entry filled, take-profit placed, stop-loss not placed with the reason, and the retry submits only the stop-loss. Drop the take-profit response: "may have been placed". Fill the entry 40 percent then cancel it on a venue that cancels children with the parent: the position shows no active protection.
 
 **Automatable check:** Mutation contract test with scripted per-leg responses.
 
@@ -3414,11 +3414,11 @@ A full close uses the venue close-position instruction when one exists, otherwis
 
 **Boundary notes:** see perps-reduce-only-never-increases-risk for reduce-only rules; batch outcomes are in perps-close-all-per-target-outcomes.
 
-**Checks:** no float conversion of position size inside close builders; a full close asserts the exact size is representable at lot precision and aborts before dispatch otherwise; a close-all batch aborts if any exact size would be truncated; presets that produce a size below the minimum are disabled; a remainder below the minimum is blocked or promoted to a full close per a sourced product rule; every close payload builder sets reduce-only.
+**Checks:** no float conversion of position size inside close builders; a full close asserts the exact size is representable at lot precision and aborts before dispatch otherwise; a close-all batch aborts if any exact size would be truncated; presets below the minimum that the venue applies to reduce-only orders are disabled; where the venue exempts reduce-only orders, they stay enabled; a remainder below the minimum is blocked or promoted to a full close per a sourced product rule; every close payload builder sets reduce-only.
 
 **Anti-pattern:** Compute the close size from the UI path: 100 percent slider to quote value at two decimals, divided by mark, floored to the lot, and sent as a plain opposite-side order.
 
-**Why it fails:** Every step of the round trip loses precision. Landing a hair under leaves dust: a residual position that still holds margin, still shows in tables and may be under the minimum order size, so it cannot be closed normally. Landing a hair over is rejected as a reduce-only violation or, without the flag, flips into a tiny opposite position. If the position changed while the request was in flight (a stop fired, another tab closed it), an unflagged close opens new opposite exposure; with the flag the venue rejects or trims instead.
+**Why it fails:** Every step of the round trip loses precision. Landing a hair under leaves dust: a residual position that still holds margin, still shows in tables and may be under the minimum order size. Landing a hair over is rejected as a reduce-only violation or, without the flag, flips into a tiny opposite position. If the position changed while the request was in flight, an unflagged close opens new opposite exposure; with the flag the venue rejects or trims instead.
 
 **Bad example (illustrative):**
 
@@ -3434,9 +3434,9 @@ const size = isFullClose({ selection, position }) ? position.sizeExact : floorTo
 
 **Legitimate exceptions:** A venue action that closes a position without taking a size, or one that sweeps dust automatically. A deliberate reverse-position feature approved by product, implemented as its own explicit flow.
 
-**Verification scenario:** A position whose 100 percent quote round trip floors one lot short: the payload size equals the exact position string and nothing remains. A position with more decimals than lot precision aborts before dispatch with a clear message. 75 percent leaving a sub-minimum remainder follows the product rule. Close the position by a stop while the close request is in flight: the result is "nothing to close", not a new opposite position.
+**Verification scenario:** A position whose 100 percent quote round trip floors one lot short: the payload size equals the exact position string and nothing remains. A position with more decimals than lot precision aborts before dispatch. 75 percent leaving a sub-minimum remainder follows the product rule. Close the position by a stop while the close request is in flight: the result is "nothing to close", not a new opposite position.
 
-**Automatable check:** Property test that close(100 percent) equals the exact size string, floored partials never exceed size and the remainder is zero or at least the minimum; test that every close-path builder sets reduce-only.
+**Automatable check:** Property test that close(100 percent) equals the exact size string, floored partials never exceed size and the remainder is zero or meets the venue rule for reduce-only minimums; test that every close-path builder sets reduce-only.
 
 Pack: `perps` (candidate). Topics: `perps`, `money`, `execution`, `frontend`, `implementation`.
 
@@ -3972,7 +3972,7 @@ const outcomes = await closeTargets({ targets: positions.map(toReduceOnlyClose),
 
 **Verification scenario:** Three positions, the second close rejects: results read closed, rejected with reason, closed. A row close concurrent with close-all opens no exposure, and the rejected or trimmed second close is reported on its target. A lost response followed by the position leaving the stream is marked closed with no second request. Switching account mid-operation keeps the outcomes on the original account.
 
-**Automatable check:** Integration tests with per-target fault injection asserting request count per position and the per-target outcome list.
+**Automatable check:** Integration tests with per-target fault injection asserting no automatic resend per position, that every close carries reduce-only, and the per-target outcome list and the per-target outcome list.
 
 Pack: `perps` (candidate). Topics: `perps`, `execution`, `mutations`, `frontend`, `implementation`.
 
@@ -5102,7 +5102,7 @@ Pack: `terminal` (candidate). Topics: `execution`, `mutations`, `frontend`, `imp
 
 ## Return from a hidden tab with a snapshot, not a replay
 
-A hidden page gets throttled timers and no animation frames, so nothing may depend on page timers or queue for a frame. While hidden, frames reduce into latest state with bounded memory and flush only at the hidden cadence of realtime-visibility-aware-batching, or not at all where that card's cadence is zero. After a grace period hidden, market-data watches (book, tape, candles) are released and re-opened as cold snapshots on return; account, order and risk channels stay subscribed so critical events still surface while hidden. On return, stream health is checked first: an intact chain renders the current state once, anything else resnapshots. For the generic rules, see realtime-visibility-aware-batching and realtime-gap-recovery-resume-or-resnapshot.
+A hidden page gets throttled timers and no animation frames, so nothing may depend on page timers or queue for a frame. While hidden, frames reduce into latest state with bounded memory and flush only at the hidden cadence of realtime-visibility-aware-batching. After a grace period hidden, market-data watches (book, tape, candles) are released and re-opened as cold snapshots on return; account, order and risk channels stay subscribed so critical events still surface while hidden. On return, stream health is checked first: an intact chain renders the current state once, anything else resnapshots. For the generic rules, see realtime-visibility-aware-batching and realtime-gap-recovery-resume-or-resnapshot.
 
 **Apply when:** implementing heartbeats, countdowns, frame-batched rendering or gap healing in a terminal that traders leave in a background tab.
 
@@ -5140,11 +5140,11 @@ Every live channel has a freshness watchdog that yields live, stale, reconnectin
 
 **Apply when:** building the socket client, reconnect and backoff logic, tab-visibility handling, or any panel that shows price, book, positions or balances of differing freshness side by side.
 
-**Checks:** panels dim and label stale data with its age; retry exhaustion is a visible failed state with manual retry and automatic resume on visibility or network return; staleness is checked immediately on tab resume; a stale verdict triggers reconnect, re-auth, re-subscribe and re-snapshot before live styling returns; the slower of two values shown side by side is labelled; periodic account snapshots are timestamped; risk-increasing actions are not sized from account state older than the last fill for that instrument; close and reduce go through the venue close instruction or a reduce-only order, so a stale size cannot add exposure, and they stay available (see perps-risk-reducing-actions-availability).
+**Checks:** panels dim and label stale data with its age; retry exhaustion is a visible failed state with manual retry and automatic resume on visibility or network return; staleness is checked immediately on tab resume; a stale verdict triggers reconnect, re-auth, re-subscribe and re-snapshot before live styling returns; the slower of two values shown side by side is labelled; risk-increasing actions are not sized from account state older than the last fill for that instrument; close and reduce go through the venue close instruction or a reduce-only order, so a stale size cannot add exposure, and they stay available (see perps-risk-reducing-actions-availability).
 
 **Anti-pattern:** Derive connected from the socket being open, rely on the close event to detect a dead connection, and stop reconnecting after a few attempts with only a log line.
 
-**Why it fails:** A half-open connection never fires close, so a silent socket shows a frozen book in live styling and the trader acts on it. Capped or hidden-suppressed reconnect with no resync on return recovers nothing until reload. Timer-pushed account snapshots lag fill events: the position row trails the fill and an order sized from it misstates the exposure. Ad hoc refetches from several places create competing writers (see realtime-one-live-writer-per-read-model).
+**Why it fails:** A half-open connection never fires close, so a silent socket shows a frozen book in live styling and the trader acts on it. Timer-pushed account snapshots lag fill events: the position row trails the fill and an order sized from it misstates the exposure. Ad hoc refetches from several places create competing writers (see realtime-one-live-writer-per-read-model).
 
 **Bad example (illustrative):**
 
@@ -5160,7 +5160,7 @@ const health = now - lastFrameAt[channel] > budget[channel] ? 'stale' : 'live'
 
 **Legitimate exceptions:** Static or slow metadata needs no indicator. With server-pushed heartbeats only the inbound timer is needed. Venues that push account state per event have no snapshot lag to label.
 
-**Verification scenario:** Stop frames without closing the socket: the panel turns stale within its budget and a reconnect starts. Exhaust retries: a failed state appears and manual retry works. Deliver a fill with the next account snapshot five seconds later: during the gap an add sized from the old snapshot is blocked, while close stays available and sends a reduce-only or close-position order. State-table tests cover open then close before ack and a late ack from an old generation.
+**Verification scenario:** Stop frames without closing the socket: the panel turns stale within its budget and a reconnect starts. Exhaust retries: a failed state appears and manual retry works. Deliver a fill with the next account snapshot five seconds later: during the gap an add sized from the old snapshot waits for a newer snapshot or follows the sourced action policy (see realtime-stream-health-action-authority), while close stays available and sends a reduce-only or close-position order. State-table tests cover open then close before ack and a late ack from an old generation.
 
 **Automatable check:** Status reducer tests with an injected clock (see web-app-injected-nondeterminism); a visual test for stale styling.
 
@@ -5242,7 +5242,7 @@ The order draft holds only what the trader typed or chose. Live price, balance a
 
 **Apply when:** ticket fields depend on live price, balance, max size or leverage; the form has Max, a slider, a limit prefill, a debounced preview, side tabs or order types.
 
-**Checks:** no effect calls a draft setter with live-data dependencies; a bounds change shows an error naming the overage; size is clamped only on a discrete trader-driven cap step (leverage change, side flip, funding-source toggle), once and lot-floored; when the product specifies a limit prefill, one resolver derives it from the book using the sourced reference, rounds it to the tick on the side that never crosses the spread, returns null while the book is unread, samples it once when the field becomes visible, keeps any value the trader typed, and clears it on market change; a debounced preview is keyed on user inputs and reads the freshest derived price at quote time; the shell owns size, limit price and slippage while entry fields remount on market, side and type; in-flight attempt state is keyed by operation id and lives outside the form that remounts, so a side flip does not drop the outcome; whether submissions may overlap is a recorded product decision enforced only by the control's existing in-flight state (see execution-fresh-identity-per-deliberate-action).
+**Checks:** no effect calls a draft setter with live-data dependencies; a bounds change shows an error naming the overage; size is clamped only on a discrete trader-driven cap step (leverage change, side flip, funding-source toggle), once, lot-floored and never while the trader is editing the size input or slider; when the product specifies a limit prefill, one resolver derives it from the book using the sourced reference, rounds it to the tick on the side that never crosses the spread, returns null while the book is unread, samples it once when the field becomes visible, keeps any value the trader typed, and clears it on market change; a debounced preview is keyed on user inputs and reads the freshest derived price at quote time; the shell owns size, limit price and slippage while entry fields remount on market, side and type; in-flight attempt state is keyed by operation id and lives outside the form that remounts, so a side flip does not drop the outcome; whether submissions may overlap is a recorded product decision enforced only by the control's existing in-flight state (see execution-fresh-identity-per-deliberate-action).
 
 **Anti-pattern:** Effects that re-clamp the size when max ticks, a limit field bound to the live mid, or a debounce keyed on a price derived from the book.
 
@@ -5257,10 +5257,10 @@ useEffect(() => setSize(min(size, max)), [max])
 **Better example (illustrative):**
 
 ```text
-const error = gt(size, max) ? 'exceeds max' : null // clamp only on a trader-driven cap step, hands off
+const error = gt(size, max) ? 'exceeds max' : null
 ```
 
-**Legitimate exceptions:** Pegged modes the trader enabled, with the pegged meaning shown and the value frozen at click. Clearing the whole ticket on any switch is a product decision to source, not a default.
+**Legitimate exceptions:** Pegged modes the trader enabled, with the pegged meaning shown and the value frozen at click.
 
 **Verification scenario:** Type Max on a market order and stream adverse ticks: the input text is unchanged and the gate names the overage. Lower leverage: the field drops to the new Max once. With a specified prefill, switch from market to limit after a wait: the field shows the resolver value sampled then, on the non-crossing side. Start a placement and flip side: the outcome still arrives on its operation id.
 
@@ -6170,7 +6170,7 @@ Trade layout: bundled scripts only; track(event) posts allowlisted fields to a f
 
 **Legitimate exceptions:** Regulatory or fraud tooling mandated on all routes: isolate it in an iframe where possible and record the accepted risk with an owner.
 
-**Verification scenario:** Load the trade route with third-party hosts blocked: full functionality. List its scripts: only same-origin hashed files. Change one byte of the vendor chart bundle on the server: the browser refuses it on integrity mismatch.
+**Verification scenario:** Load the trade route with third-party hosts blocked: full functionality. List its scripts: only same-origin hashed files. Change one byte of the vendor entry script on the server: the browser refuses it on integrity mismatch; a write to its sub-bundle directory from a non-release credential is denied and alerted.
 
 **Automatable check:** An end-to-end assertion that the trade route requests no script from another origin, and a CI check that every external or vendor script tag has an integrity attribute.
 

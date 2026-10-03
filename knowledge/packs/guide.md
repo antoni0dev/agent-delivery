@@ -18,6 +18,20 @@ A candidate pack is a usable decision aid that the historical 58-card audit does
   - [Version contract artifacts and gate address changes](#chain-contract-artifact-provenance)
   - [Prove wallet and chain journeys with deterministic fixtures](#chain-wallet-and-chain-qa-fixtures)
   - [Treat the wallet as an untrusted, user-controlled boundary](#chain-wallet-untrusted-user-boundary)
+- **API contracts and data boundaries** (`contracts`, candidate): Frontend and backend contract decisions: error envelopes, breaking-change gates for strict generated consumers, generated socket contracts, committed snapshots with provenance, boundary validator ownership, pagination cursors, wire money and time, and safe data evolution for renames, replays and backfills. Load it when a change touches an API or stream shape, codegen, a validator, persisted data or a data migration.
+  - [Branch on stable error codes, display only sanitized messages](#contracts-error-envelope-stable-codes)
+  - [Gate contract changes against the strictest generated consumer](#contracts-breaking-change-strict-consumers)
+  - [Generate the socket contract and gate it twice](#contracts-generated-ws-contract-gates)
+  - [Commit contract snapshots with verifiable provenance](#contracts-committed-snapshot-provenance)
+  - [Name one validator per untrusted boundary](#contracts-boundary-validator-authority)
+  - [Validate payloads strictly, envelopes tolerantly, unknowns loudly](#contracts-strict-payload-tolerant-envelope)
+  - [Seal pagination cursors and publish page bounds](#contracts-sealed-cursors-page-bounds)
+  - [Rename fields through a dual-name window](#contracts-dual-name-rename-window)
+  - [Repair insert-triggered aggregates after replays deepest-first](#contracts-insert-views-replay-double-count)
+  - [Make backfilled rows always lose to live rows](#contracts-backfills-lose-to-live)
+  - [Compute each fact once, in one producer](#contracts-one-fact-one-producer)
+  - [Make unsafe use of an API unrepresentable](#contracts-misuse-proof-apis)
+  - [Keep money, time and estimates unambiguous on the wire](#contracts-wire-money-time-estimates)
 - **Order and transaction execution** (`execution`, candidate): Submitting money-moving actions from client to server to chain: per-action operation identity, proof of non-dispatch, unknown and partial outcomes, account and auth fencing, backend idempotency claims, execution receipts, journaled broadcasts, nonces and observed settlement. Load it when planning, implementing or reviewing order, trade, transfer or withdrawal submission and the pipeline that executes it.
   - [Mint a fresh operation identity per deliberate action](#execution-fresh-identity-per-deliberate-action)
   - [Never gate dispatch on browser bookkeeping](#execution-no-browser-ledger-before-dispatch)
@@ -53,6 +67,19 @@ A candidate pack is a usable decision aid that the historical 58-card audit does
   - [Preflight every plan before it spends a nonce](#money-preflight-before-nonce)
   - [Classify swap failures in one closed taxonomy](#money-closed-swap-failure-taxonomy)
   - [Judge token sellability by what the sell reads](#money-adversarial-token-simulation)
+- **Release, runtime and operations** (`operations`, candidate): Release and runtime decisions: tag-based roll-forward behind schema gates, honest readiness, alert runbooks and paging, edge rate limiting, independent data verification, enforcement ratchets, release authority, GitOps promotion, preview and deploy safety, supply-chain hardening, fail-safe CI selection and resilience budgets. Load it when a change touches release or deploy workflows, CI, probes, alerts, rate limits or failure handling.
+  - [Roll forward only, behind a schema gate](#operations-roll-forward-schema-gated-release)
+  - [Report readiness only when the service can work](#operations-honest-readiness-probes)
+  - [Ship every alert with a runbook and permission level](#operations-alert-runbook-automation-level)
+  - [Rate limit at the edge with explicit failure posture](#operations-edge-rate-limit-failure-posture)
+  - [Verify data against independent sources nightly](#operations-independent-source-correctness)
+  - [Ratchet rules you cannot deny outright](#operations-ratchet-unfixable-rules)
+  - [Split release preparation from production authority](#operations-split-release-authority-provenance)
+  - [Promote environments through Git and strict tag patterns](#operations-gitops-tag-pattern-promotion)
+  - [Keep previews and deploys current, scoped and coupled](#operations-preview-deploy-safety)
+  - [Harden dependency intake and the CI supply chain](#operations-supply-chain-baseline)
+  - [Scope CI by diff but fail safe](#operations-fail-safe-diff-scoped-ci)
+  - [Budget fault scenarios with explicit resilience thresholds](#operations-resilience-game-day-budgets)
 - **Realtime streams, client and server** (`realtime`, candidate): Concrete refinements for live data across the server WebSocket layer, the bus and stream-processing layer behind it, and browser consumption: subscribe handshake ordering, egress backpressure, identity stamping, publish dedup, checkpoint and replay positions, frame ordering, single live writers, cross-tab socket brokering and gap recovery. Load it when a change touches a socket channel, a bus subject or consumer, a stream processor's sink or checkpoint, or a client cache fed by a stream.
   - [Open live coverage before the snapshot query](#realtime-live-coverage-before-snapshot)
   - [Hold data behind its ack and fence unsubscribes](#realtime-ack-gate-and-unsubscribe-fence)
@@ -537,6 +564,474 @@ if (isUserRejection(e)) return settleIdle(); if (wallet.chainId !== intent.chain
 **Verification scenario:** Using the deterministic provider, reject the prompt (idle, no retry), switch chain between review and sign (nothing signed until confirmed) and lock the wallet (balances still render).
 
 Pack: `chain` (candidate). Topics: `chain`, `signing`, `security`, `frontend`, `implementation`.
+
+<a id="contracts-error-envelope-stable-codes"></a>
+
+## Branch on stable error codes, display only sanitized messages
+
+Every error response carries one envelope: a stable SCREAMING_SNAKE_CASE code, a user-facing message and a sanitized flag. One server-side error enum owns each variant's code, HTTP status and sanitized bit, so each client-distinct condition gets its own code and the status names the real cause (maintenance or a down dependency is 503, not 403 or 500). Clients branch only on code and show message only when sanitized is exactly true.
+
+**Apply when:** Adding a backend error variant, mapping a downstream or venue error, or writing frontend error handling, toasts or retry UI.
+
+**Boundary notes:** Mark a variant unsanitized only when its text can carry content the backend did not author (deserializer, downstream or venue text); prefer curating it at the source. A legacy body without the flag is not displayable.
+
+**Checks:** Each condition a client handles differently has its own code; status follows the condition (403 permission, 404 missing, 400 validation, 503 maintenance or dependency down); the frontend never parses, displays or logs unsanitized message text; socket error frames use the same envelope.
+
+**Anti-pattern:** Collapse geo-block, maintenance and verification-required into one generic forbidden code, or match on message text to decide behavior.
+
+**Why it fails:** The client cannot pick the right recovery (inform, retry, redirect), rewording a message silently changes logic, and raw upstream text can leak internals to users mid-incident.
+
+**Bad example (illustrative):**
+
+```text
+if (err.message.includes('maintenance')) showRetry(); else toast(err.message)
+```
+
+**Better example (illustrative):**
+
+```text
+Map err.code to a recovery; show err.message only when err.sanitized === true, else the status fallback copy.
+```
+
+**Legitimate exceptions:** A temporary adapter may classify a legacy backend's diagnostic text until a code exists, if the raw text is never displayed and the shim has a removal owner. Fallback copy is a product decision.
+
+**Verification scenario:** Return the same 4xx with sanitized true, false and absent, plus an unknown code: the curated message shows once, the fallback twice, and the unknown code takes only the generic path.
+
+**Automatable check:** A backend test table asserts status, code and sanitized per variant; a lint forbids branching on the API error's message.
+
+Pack: `contracts` (candidate). Topics: `contracts`, `errors`, `frontend`, `backend`, `implementation`.
+
+<a id="contracts-breaking-change-strict-consumers"></a>
+
+## Gate contract changes against the strictest generated consumer
+
+CI diffs every committed contract artifact (REST spec and socket contract) against the base branch and fails on a break, using a rule table that models the strictest consumer: generated clients with closed enums and strict objects. Requests are input and responses are output, so adding an output enum value, a property on a closed output object or a union variant is breaking, as is removing or tightening anything a client sends. Refines core card encoding-reader-writer-compatibility.
+
+**Apply when:** A PR changes a request or response type, an enum, a channel payload or filter, or an endpoint's auth or existence.
+
+**Boundary notes:** Additive changes are safe only in the open direction: a new optional request field, or a new output field on an object no consumer validates strictly.
+
+**Checks:** The diff walks only reachable operations, channels and envelopes; retirement is two steps (deprecate, keep at least one release, delete); a renamed input keeps accepting the old name as a deprecated alias; a deliberate break carries an acknowledgement label and coordinated client releases; consumer validators are really strict.
+
+**Anti-pattern:** Treat 'only added a value' as backward compatible and ship a new status enum value before clients can parse it.
+
+**Why it fails:** Deployed clients with closed enums reject the whole payload, so a live channel drops updates or breaks a view for every user until a new build loads.
+
+**Bad example (illustrative):**
+
+```text
+Add status 'expired' to an output enum and merge because the diff only adds lines.
+```
+
+**Better example (illustrative):**
+
+```text
+Ship client handling first (or an explicit unknown branch), then add the value with the break acknowledged and the client release linked.
+```
+
+**Legitimate exceptions:** A lockstep change where every consumer ships in the same deploy can acknowledge the break deliberately. Deprecation length and which consumers count are release decisions.
+
+**Verification scenario:** Run the checker on fixtures that add an output enum value, add a strict-object property, drop a deprecated operation and add an optional request field: the first two fail, the last two pass.
+
+**Automatable check:** A required CI job compares base and head artifacts with the rule table and passes a break only when the acknowledgement label is present.
+
+Pack: `contracts` (candidate). Topics: `contracts`, `release`, `backend`, `frontend`, `review`.
+
+<a id="contracts-generated-ws-contract-gates"></a>
+
+## Generate the socket contract and gate it twice
+
+Publish the socket protocol as a generated, committed artifact: envelope schemas, a manifest binding each channel to its auth mode, envelope and payload schema, and payload JSON Schemas derived from the real wire types. Two CI gates keep it honest: a byte-for-byte regeneration test fails on drift, and a test asserts the manifest's channels equal the server's live subscription registry. Semantics a schema cannot express (merge key, sort, retention cap, primer and live overlap, always-null fields) go in the channel description inside the artifact.
+
+**Apply when:** Adding or changing a channel, a payload type, a subscribe filter or a channel's auth mode.
+
+**Boundary notes:** Each channel declares one payload shape; one serving a snapshot page and live updates declares an array and sends one-element arrays live. A channel with a disabled upstream stays registered and rejects subscribes, keeping the registry check exact.
+
+**Checks:** The regenerated artifact lands in the same commit as the type change; fields the server stamps (caller identity) are excluded from the published filter; the description tells consumers how to merge without reading server code; units the schema cannot distinguish (ms and ns are both int64) get a source-level check.
+
+**Anti-pattern:** Hand-maintain a document listing channels and payloads, or let consumers infer shapes from live frames.
+
+**Why it fails:** The document rots silently; renamed fields and new channels ship unnoticed until frames fail validation in production, and merge rules guessed from samples corrupt live views.
+
+**Bad example (illustrative):**
+
+```text
+Describe a new channel's payload in a wiki and tell clients to log frames to learn the fields.
+```
+
+**Better example (illustrative):**
+
+```text
+Derive the payload schema from the wire type, regenerate, and let the drift and registry tests fail until the artifact is committed.
+```
+
+**Legitimate exceptions:** Third-party sockets keep their own boundary schema. An experimental channel may skip client codegen only if the registry test lists it explicitly.
+
+**Verification scenario:** Add a payload field without regenerating: the drift test fails. Register a channel with no manifest row: the registry test fails.
+
+**Automatable check:** A snapshot test with an update switch, plus a registry-equality test in the required CI lane.
+
+Pack: `contracts` (candidate). Topics: `contracts`, `realtime`, `backend`, `frontend`, `review`.
+
+<a id="contracts-committed-snapshot-provenance"></a>
+
+## Commit contract snapshots with verifiable provenance
+
+Consumers generate clients from committed contract snapshots, never from a live endpoint at build time, and never hand-edit generated output. A committed provenance record holds the backend revision and a SHA-256 digest per artifact (REST spec, socket contract, whole generated tree); an offline verifier in required CI fails when any changes without matching provenance. Authenticated regeneration runs only when contract paths change or a label asks for it, is transactional (any failed step restores every snapshot), and fresh means regenerating produces no diff.
+
+**Apply when:** Updating API types, consuming a new endpoint, touching generated files, or wiring codegen into CI.
+
+**Boundary notes:** Generate runtime validation schemas only for an allowlist of components crossing an untrusted boundary; generated TypeScript types validate nothing at runtime.
+
+**Checks:** Snapshot, generated tree and provenance change in one commit; the offline verifier needs no network or credentials and is never skipped for missing secrets; generation never falls back to stale artifacts; freshness compares working-tree hashes before and after regeneration, not HEAD, so merge commits work; path-filtered checks let main drift, so regenerate after merging main.
+
+**Anti-pattern:** Patch a wrong generated type by hand, or let the build download the latest spec.
+
+**Why it fails:** Hand edits vanish on the next run and hide the backend bug; build-time downloads make builds unreproducible and tie every deploy to another environment's uptime and unreviewed contract changes.
+
+**Bad example (illustrative):**
+
+```text
+Edit the generated order type to make a field optional so the page compiles.
+```
+
+**Better example (illustrative):**
+
+```text
+Fix the backend type, regenerate from the authoritative contract, and commit snapshot, client and provenance together.
+```
+
+**Legitimate exceptions:** A degraded diagnostic mode may reuse committed artifacts, but it is not a supported generation path. A single-repo app may generate from source directly.
+
+**Verification scenario:** Change one byte in the generated tree: the offline verifier fails. Fail the second download mid-run: both snapshots and the tree are restored.
+
+**Automatable check:** Offline digest verification in the required lane; authenticated regeneration gated on contract paths or a label.
+
+Pack: `contracts` (candidate). Topics: `contracts`, `types`, `frontend`, `testing`, `implementation`.
+
+<a id="contracts-boundary-validator-authority"></a>
+
+## Name one validator per untrusted boundary
+
+Each boundary has exactly one runtime authority: app-owned persisted state uses schemas generated from its TypeScript source type, REST and socket payloads use schemas generated from the backend contract, cross-window messages use one strict shared schema, and third-party callbacks use a small boundary-owned schema. The schema proves structure only; migration, recovery, clamping, identity, origin and money policy stay explicit beside it. Refines core cards types-boundary-validation and storage-versioned-boundary.
+
+**Apply when:** Adding persistence, a postMessage protocol or a new API consumer, or writing a handwritten type guard over an object shape.
+
+**Boundary notes:** Primitives and closed scalar unions need no generated schema; internal unions already exhaustive in the type system need no runtime re-check.
+
+**Checks:** No handwritten object-shape predicate duplicates a generated schema; persisted slices are read through loose candidate types (every field unknown) and validated per field, so one corrupt field resets itself while valid siblings survive; a projection derived from a generated schema never broadens fields beyond it without a documented compatibility reason; generated schemas are verified fresh in CI.
+
+**Anti-pattern:** Write a bespoke isValidSettings guard and accept or reject the whole persisted blob at once.
+
+**Why it fails:** The guard drifts from the type, and one malformed field wipes every saved preference or leaves initialization stuck.
+
+**Bad example (illustrative):**
+
+```text
+if (!isSettings(JSON.parse(raw))) resetAllSettings()
+```
+
+**Better example (illustrative):**
+
+```text
+Parse raw into a candidate of unknown fields, validate each slice with its generated schema, keep valid siblings, then apply explicit migration policy.
+```
+
+**Legitimate exceptions:** Capability detection, redaction walkers and reference-sensitive cache reconciliation are procedural, not shape validation. What happens to unrecoverable stored user data is a product decision.
+
+**Verification scenario:** Persist one corrupt slice beside one valid slice: the valid slice loads and the corrupt one resets; a cross-window message with an extra key is rejected.
+
+**Automatable check:** A codegen freshness check over registered persisted types, and a lint flagging new handwritten object type guards outside boundary modules.
+
+Pack: `contracts` (candidate). Topics: `boundaries`, `types`, `storage`, `frontend`, `implementation`.
+
+<a id="contracts-strict-payload-tolerant-envelope"></a>
+
+## Validate payloads strictly, envelopes tolerantly, unknowns loudly
+
+A stream or REST consumer validates the payload with the generated strict schema and parses the envelope tolerantly (strip unknown keys, default missing acknowledgement fields), so protocol additions drop nothing while payload drift is caught. A rejected payload goes to the owning feature's contract-failure and recovery path; it is not a subscription error and never satisfies an acknowledgement. Unknown external discriminants (status, side, type) fail at the boundary, and a Record lookup keyed by a wire value asserts the key existed. Refines core card types-boundary-validation.
+
+**Apply when:** Writing a stream adapter, a REST response mapper, or a label or handler map keyed by a backend enum.
+
+**Boundary notes:** Fallbacks are fine for display, preferences, optional fields and query initial data, never for a required discriminant or required mapper field.
+
+**Checks:** The transport separates unusable, ignored and valid frames; a contract failure emits an identifier-safe diagnostic and triggers the owner's declared recovery; only a valid ack frame for that subscription sets ack state; unknown enum members throw with context instead of rendering empty; validation runs once at ingress.
+
+**Anti-pattern:** Treat a schema rejection as a subscription failure, or resolve an unknown side with an empty-string fallback.
+
+**Why it fails:** Failing the subscription on one bad frame tears down a healthy stream, treating it as an ack can mark a scope live before its snapshot, and an empty label hides an order the UI no longer understands.
+
+**Bad example (illustrative):**
+
+```text
+const label = sideLabels[order.side] ?? ''
+```
+
+**Better example (illustrative):**
+
+```text
+const label = required(sideLabels[order.side], 'label for side ' + order.side)
+```
+
+**Legitimate exceptions:** Third-party sockets keep their own boundary policy. An intentionally open enum with an explicit unknown branch is fine when the product defines how unknown renders.
+
+**Verification scenario:** Inject an extra envelope key, a payload with an unknown enum member and a malformed JSON frame: the first applies, the second reaches the owner's failure path without acking, the third is dropped and counted.
+
+**Automatable check:** A lint against nullish fallbacks on required discriminants, and a transport test asserting rejected payloads never change ack state.
+
+Pack: `contracts` (candidate). Topics: `boundaries`, `realtime`, `contracts`, `frontend`, `review`.
+
+<a id="contracts-sealed-cursors-page-bounds"></a>
+
+## Seal pagination cursors and publish page bounds
+
+List endpoints use keyset pagination with an opaque cursor carrying the sort key plus a unique tie-breaker. When a cursor encodes anything the response hides (another user's id, a signature, an internal offset), seal it with authenticated encryption under a per-deployment key and bind it to a fingerprint of the request scope (caller, filters, sort). The maximum page size is declared in the schema and equals the server clamp, so generated clients know the bound.
+
+**Apply when:** Adding or changing a paginated list, an infinite-scroll consumer, or a cursor that encodes identifiers.
+
+**Boundary notes:** A plain encoded cursor is fine when it holds only values the response already shows; sealing adds a key and a rotation story.
+
+**Checks:** A malformed, tampered or scope-mismatched cursor returns a distinct invalid-cursor error telling the client to restart from the first page, never a silent restart; tie-breakers make the order total; rotating the key intentionally retires outstanding cursors; public stand-in ids are keyed hashes, not plain digests an attacker can enumerate; the client resets its pages once on that error instead of looping.
+
+**Anti-pattern:** Decode a bad cursor as no cursor and serve page one, or accept a cursor after the user changed filters.
+
+**Why it fails:** Infinite scroll silently duplicates or loops rows, and a forged or replayed cursor can read past the caller's scope or reveal identifiers the response hides.
+
+**Bad example (illustrative):**
+
+```text
+cursor = base64(JSON({ userId, offset })); a decode failure falls back to offset 0
+```
+
+**Better example (illustrative):**
+
+```text
+cursor = seal({ ts, id, scope }); open failure or scope mismatch returns an invalid-cursor error and the client restarts once.
+```
+
+**Legitimate exceptions:** Small bounded lists can return everything with no cursor. Offset paging is acceptable for upstreams that only page by offset, behind the same strict decode.
+
+**Verification scenario:** Tamper one byte, change a filter between pages and rotate the key: each returns the invalid-cursor error, and the client restarts once with no duplicate rows.
+
+**Automatable check:** A contract test that every list endpoint's limit parameter declares a maximum equal to the server clamp.
+
+Pack: `contracts` (candidate). Topics: `contracts`, `query`, `security`, `backend`, `implementation`.
+
+<a id="contracts-dual-name-rename-window"></a>
+
+## Rename fields through a dual-name window
+
+When any consumer silently drops unknown fields (a skip-unknown ingestion queue, a stripping schema, a lenient mapper), a rename is a sequence: consumer and projection accept both names and write both, the producer cuts over, old data is backfilled, a soak proves nothing reads the old name, then the old name is removed. The window lets the producer roll forward or back at any moment with no gap. Apply schema steps dependency-first (storage, then intake, then projection) and reverse them for rollback.
+
+**Apply when:** Renaming a field on a stream, a persisted record, a materialized projection or a response read by lenient consumers.
+
+**Boundary notes:** For strict generated consumers a rename is an explicit breaking change instead; prefer add-new, deprecate-old.
+
+**Checks:** The consumer side is live before the producer emits the new name; the projection writes both target fields, not only the new one; the missing leg arrives as a type default, so the merge picks the populated side; the soak is evidence-based; no single migration collapses all steps.
+
+**Anti-pattern:** Assume full-state snapshots are re-emitted, so a skew window will self-heal.
+
+**Why it fails:** Messages carrying the new name hit a consumer that ignores it, are acknowledged, and land as default zeros that supersede the last good row. Only re-emitted keys heal; dormant keys and per-interval facts stay wrong indefinitely, and the lost values never got past the wire.
+
+**Bad example (illustrative):**
+
+```text
+One migration renames the column while the producer deploy goes out independently.
+```
+
+**Better example (illustrative):**
+
+```text
+Step 1 accept and write both names; step 2 producer cutover; step 3 backfill and soak; step 4 drop the old name.
+```
+
+**Legitimate exceptions:** A lockstep deploy with no queued or stored old-format data can rename directly. If history cannot be backfilled, document which periods keep only the old name.
+
+**Verification scenario:** Run the producer with the old name, then the new name, then roll it back against the dual-name consumer: every row keeps its value under both names and no default zeros appear.
+
+**Automatable check:** A migration lint rejecting removal of a field in the same change that adds its replacement.
+
+Pack: `contracts` (candidate). Topics: `contracts`, `data`, `distributed`, `backend`, `planning`.
+
+<a id="contracts-insert-views-replay-double-count"></a>
+
+## Repair insert-triggered aggregates after replays deepest-first
+
+Materialized views fire on insert, before the base table's merge-time deduplication, so a replayed or re-delivered row collapses in the base table but stays double-counted in any summing aggregate built from it (for example views over a replacing merge-tree table). Views also never fire on delete. Treat every replay and backfill as aggregate-corrupting and repair the whole chain: drop the affected partitions deepest dependent first, then re-derive once with a statement that inserts only missing buckets.
+
+**Apply when:** Replaying a stream, re-running a backfill, redelivering a consumer backlog, or adding a rollup fed by a deduplicating table.
+
+**Boundary notes:** Steady state usually shows no duplicates; the risk follows replays, so the check belongs in incident and backfill runbooks, not the hot path.
+
+**Checks:** Every downstream rollup in the chain is listed before repair; partitions are dropped from the deepest dependent upward so re-derivation does not add a second copy; the re-derive statement skips buckets already present and is safe to run twice; retention is checked, because once source rows expire the skip guard is blind and a repeat run doubles the next table; an audit compares each rollup with a direct aggregate of the base table.
+
+**Anti-pattern:** Repair only the first rollup and re-run its backfill.
+
+**Why it fails:** The re-run re-triggers every downstream view, adding a second copy to tables that sum states and turning one bad day into two, so charts and volume figures overstate activity.
+
+**Bad example (illustrative):**
+
+```text
+Delete the suspect day from the minute rollup, then re-run the minute backfill.
+```
+
+**Better example (illustrative):**
+
+```text
+Drop the day from every rollup in the chain, deepest first, then run the insert-only-missing backfill once and let the chain refill behind it.
+```
+
+**Legitimate exceptions:** Aggregates with their own deduplication do not double count. Recomputing a small aggregate from scratch can be simpler than partition surgery.
+
+**Verification scenario:** Replay a known range into a test chain: the rollup reads high against a direct base aggregate; after repair the two match and a second repair run changes nothing.
+
+**Automatable check:** A scheduled query comparing each rollup window with a direct base-table aggregate within a tolerance.
+
+Pack: `contracts` (candidate). Topics: `data`, `distributed`, `operations`, `backend`, `review`.
+
+<a id="contracts-backfills-lose-to-live"></a>
+
+## Make backfilled rows always lose to live rows
+
+A backfill must never overwrite fresher live data. Stamp backfilled rows with the lowest legitimate version for their key (for example the bucket's own window time) so any live row for the same key wins deduplication, mark them as backfilled, and make reruns rewrite only their own rows. Large rewrites go through a shadow table fed by a dual-write view, a coverage check, then an atomic swap. Refines core card batch-replay-and-publication.
+
+**Apply when:** Seeding history from before a pipeline went live, filling an ingestion gap, recomputing a derived column, or bulk-loading a version-deduplicated table.
+
+**Boundary notes:** A source with its own monotonic version can carry that version instead; the invariant is that data written live after the backfill read must win.
+
+**Checks:** The version scheme proves live wins for every overlapping key; the job is idempotent, has a dry run and exits non-zero on partial coverage; the shadow flow verifies distinct-key coverage against the source before swapping and drops the shadow on failure; shadow names are unique per run because swaps exchange names, not underlying replication paths; two backfills never target one destination at once; snapshot first when an irreversible swap must be undoable.
+
+**Anti-pattern:** Stamp backfilled rows with the current time as their version.
+
+**Why it fails:** The backfill outranks rows the live pipeline wrote after the backfill read its source, so users see stale prices, balances or candles until those keys happen to update again.
+
+**Bad example (illustrative):**
+
+```text
+INSERT history into the live table with version = now() while ingestion runs.
+```
+
+**Better example (illustrative):**
+
+```text
+INSERT history with version = window_time and a backfill marker; live rows for the same bucket keep winning.
+```
+
+**Legitimate exceptions:** When ingestion is stopped and the backfill is the only writer, version ordering matters less, though reruns must stay idempotent. Coverage thresholds are an owner decision.
+
+**Verification scenario:** Backfill a range where the live pipeline already wrote newer rows: the read model keeps the live values, and rerunning the backfill changes nothing.
+
+**Automatable check:** A post-run assertion that no backfill-marked row outranks a live row for the same key.
+
+Pack: `contracts` (candidate). Topics: `data`, `storage`, `operations`, `backend`, `implementation`.
+
+<a id="contracts-one-fact-one-producer"></a>
+
+## Compute each fact once, in one producer
+
+A domain fact (a fill, a balance, a venue's identity, a PnL figure) is computed once by its owning producer and flows through the confirmed pipeline to every reader. Serving layers and screens read the published fact; they never reach into the producer's working state or recompute it with their own rules. A lookup table that decides something (which venues are decodable or allowed) lives in one place, and every guard reads that same value. Refines core card dataflow-source-and-projection-contract.
+
+**Apply when:** A second service or component wants the same derived number, an endpoint wants to read engine state directly, or two code paths classify the same thing.
+
+**Boundary notes:** Presentation (formatting, display-unit conversion) can stay with the reader. A cache of the published fact is fine; a second derivation is not.
+
+**Checks:** Name the single producer and the path the fact travels; reject endpoints that read another service's internal state; every screen showing the same value reads the same source, not REST in one place and a live stream in another; downstream schema changes stay minimal.
+
+**Anti-pattern:** Let the API compute a position total from raw engine state while the indexer publishes its own.
+
+**Why it fails:** Two producers of one fact disagree on edge cases, users see different balances on two screens, and reconciliation code gets written to paper over a split authority.
+
+**Bad example (illustrative):**
+
+```text
+The header balance sums REST positions while the portfolio table sums live-stream positions.
+```
+
+**Better example (illustrative):**
+
+```text
+Both read the one published positions model; the producer owns the sum.
+```
+
+**Legitimate exceptions:** An independent verifier deliberately recomputes facts from separate sources to detect drift; it reports and never serves. A migration may run two producers behind a comparison until cutover.
+
+**Verification scenario:** Change the producer's rule in a test: every reader's displayed value changes together, and no reader holds its own copy of the rule.
+
+**Automatable check:** A dependency rule forbidding the serving layer from importing producer internals.
+
+Pack: `contracts` (candidate). Topics: `contracts`, `data`, `frontend`, `backend`, `planning`.
+
+<a id="contracts-misuse-proof-apis"></a>
+
+## Make unsafe use of an API unrepresentable
+
+Assume the next caller follows the documented API and thinks about nothing else. Safety checks run inside the operation or at construction, never as a separate validate step the caller must remember; when operation B is legal only after check A, B accepts a type only A can produce. Never accept two arguments that must agree; derive one from the other. Verify what executes (the bytes, the parsed value), never a label or the caller's word.
+
+**Apply when:** Designing a public function, constructor, submit path or guard, especially for orders, signatures, transfers or routing.
+
+**Boundary notes:** Wire types and inert configuration tables can be plain public records when every field combination is valid.
+
+**Checks:** Constructors validate and keep fields private; values are parsed at construction (addresses, amounts, timestamps), not lazily on the submit path where a failure is a lost trade; no accessor bypasses a guard, even one nothing calls yet; a value another party can write (a shared cache, a provider label) is not proof; an amount and its raw units are never passed separately.
+
+**Anti-pattern:** submit(order, amount, decimals) plus a separate checkOrder(order) the caller is expected to run first.
+
+**Why it fails:** The skippable check is eventually skipped, mismatched arguments encode the wrong size, and the failure surfaces as a rejected or wrong-sized trade instead of a construction error.
+
+**Bad example (illustrative):**
+
+```text
+if (isValid(draft)) submit(draft, draft.amount, decimals)
+```
+
+**Better example (illustrative):**
+
+```text
+const order = parseOrder(draft); submit(order) // only parseOrder can produce the validated order type
+```
+
+**Legitimate exceptions:** Do not brand every primitive; reserve proof types for transitions that move money or authority. Helpers behind an already validated boundary need no re-check.
+
+**Verification scenario:** Try to call the submit path with an unvalidated draft or mismatched units: it fails to compile or cannot be constructed, and the checking constructor is the only way in.
+
+**Automatable check:** Type tests with expected compile errors proving the unchecked type cannot reach the submit function.
+
+Pack: `contracts` (candidate). Topics: `types`, `boundaries`, `frontend`, `backend`, `implementation`.
+
+<a id="contracts-wire-money-time-estimates"></a>
+
+## Keep money, time and estimates unambiguous on the wire
+
+Money crosses every boundary as a decimal string and stays exact end to end: no float conversion before validation, arithmetic or submission. Timestamps use one unit (milliseconds) on the wire, converted from storage-native units in a wire-type shim. Requested or quoted amounts and executed fills are separate fields, and a quoted output is labelled an estimate until the authoritative fill or receipt arrives.
+
+**Apply when:** Adding a money or time field to a response or payload, building a mutation payload, or showing expected versus received amounts.
+
+**Boundary notes:** Display-only numbers (charts, sorting) may convert to float; they never flow back into payloads or exact math.
+
+**Checks:** The schema declares money as a string; the frontend uses exact decimal helpers and validates syntax, sign and precision before converting to base units; a required money field fails at the mapper, never defaults to zero; a source-level unit check covers timestamps because a contract diff cannot tell ms from ns integers; the configured amount is never a sum of fills; settlement shows from an observed receipt, never from a send acknowledgement.
+
+**Anti-pattern:** Build a minimum-output field with Number(amount) * (1 - slippage), or present a quote's output as the received amount.
+
+**Why it fails:** Float rounding changes the submitted amount, a thousandfold unit slip never errors but corrupts silently, and users read an estimate as a guarantee.
+
+**Bad example (illustrative):**
+
+```text
+minOut = Number(quote.out) * 0.99; toast('Received ' + quote.out)
+```
+
+**Better example (illustrative):**
+
+```text
+minOut = applyBps(quote.out, slippageBps) on decimal strings; show the output as estimated until the fill event reports the executed amount.
+```
+
+**Legitimate exceptions:** Integer minor units are an equally exact wire format when the contract declares them. Estimate copy, slippage and tolerance values are product decisions and must be sourced.
+
+**Verification scenario:** Submit an amount beyond the float-safe range at maximum precision: the payload preserves every digit; a frame carrying a nanosecond timestamp is caught by the unit check before release.
+
+**Automatable check:** A lint banning Number() and parseFloat() on money-typed values in payload builders, and a source check that wire timestamp fields use the millisecond type.
+
+Pack: `contracts` (candidate). Topics: `money`, `contracts`, `frontend`, `backend`, `implementation`.
 
 <a id="execution-fresh-identity-per-deliberate-action"></a>
 
@@ -1671,6 +2166,438 @@ const levers = sellReads(pinned, signer).minus(writes(buy, approve)); score({ le
 **Verification scenario:** Run fixtures for a plain token, a toggle-gated sell, a hard-coded admin, a time-gated sell, a blocklisted signer and an empty pool; verify levers on gated tokens, refusal for the blocklisted signer, a depth flag, and an "unresolved" score distinct from "clean".
 
 Pack: `money` (candidate). Topics: `security`, `contracts`, `chain`, `backend`, `review`.
+
+<a id="operations-roll-forward-schema-gated-release"></a>
+
+## Roll forward only, behind a schema gate
+
+Production deploys only the highest release tag on the main line, and each job re-checks that after approval, so a stale run approved late ships nothing. Rollback is a revert on main plus a new, higher patch release, because re-pushing an old tag does not re-promote under a newest-build image policy. A release whose code needs a migration is blocked until production records it as applied, and automatic DDL is limited to additive, reversible operations that never auto-revert. Refines core card operations-recovery-and-change.
+
+**Apply when:** Cutting a release, planning a rollback, shipping code that needs a new column or table, or automating migrations.
+
+**Boundary notes:** Code rollback never undoes DDL. Destructive or rewriting migrations (drop, truncate, rename, type change, shorter retention, mutations) stay operator-driven with a written plan.
+
+**Checks:** The gate reads production's migration ledger and fails closed on an unreadable answer; a per-release override names migrations deliberately left unapplied; new migration numbers must exceed the base branch's highest, catching collisions and stale PRs; automated DDL is idempotent, serialized, stops on first failure and writes an audit row; failures alert a human who decides on any down migration.
+
+**Anti-pattern:** Re-tag an old version to roll back, or let the pipeline run down migrations automatically on failure.
+
+**Why it fails:** The re-tag is ignored, leaving production on the bad build, and a context-free revert can recreate the wrong schema and break ingestion again.
+
+**Bad example (illustrative):**
+
+```text
+On deploy failure: run every down migration, then re-push the previous tag.
+```
+
+**Better example (illustrative):**
+
+```text
+Merge a revert, cut the next patch tag, and let a human choose any schema revert from the incident evidence.
+```
+
+**Legitimate exceptions:** A hosting platform may instantly promote a known-good build during an incident; follow with a normal revert release so Git and production converge.
+
+**Verification scenario:** Cut a release needing an unapplied migration: the gate blocks it; apply it and re-run: it ships. Approve an older tag's run after a newer tag exists: it ships nothing.
+
+**Automatable check:** A release preflight comparing added migrations with the production ledger, and a CI check that new migration numbers exceed the base maximum.
+
+Pack: `operations` (candidate). Topics: `release`, `operations`, `data`, `backend`, `planning`.
+
+<a id="operations-honest-readiness-probes"></a>
+
+## Report readiness only when the service can work
+
+Readiness means this instance can do its job now: false until boot catch-up finishes, required inputs are primed and every listener and consumer is bound; false again when its input feed stalls or shutdown begins, so load balancers drain first. Liveness is separate and one-way: trip it at once on a dead worker, or on sustained non-readiness only after the instance has been ready, never during a long catch-up. Probes read in-memory flags that a service-owned loop computes.
+
+**Apply when:** Adding a service or consumer, a long startup phase, or a dependency the service cannot work without.
+
+**Boundary notes:** The same honesty applies to client live-data health: measure freshness by frames or heartbeats received, not value changes (a quiet market sends no new prices), and disable actions needing live authority while stale.
+
+**Checks:** The probe server binds before long staging work, so a download is not mistaken for a dead process; ready is never set while a listener or consumer bind can still fail; staleness is computed off the probe path; metrics use their own port; consumer idle heartbeats and reopen behavior are set deliberately so a stalled pull consumer surfaces instead of sitting silent; shutdown handles SIGTERM.
+
+**Anti-pattern:** Mark ready as soon as the process starts and ping dependencies inside the probe handler.
+
+**Why it fails:** Traffic reaches an instance that is still catching up or deaf, users get stale data while health is green, and probe-time pings turn a dependency blip into a restart storm.
+
+**Bad example (illustrative):**
+
+```text
+ready = true at boot; the readiness handler awaits a database ping before consumers attach
+```
+
+**Better example (illustrative):**
+
+```text
+Start the probe first, mark ready after catch-up and binds, flip readiness from a staleness loop, trip liveness only on settled failure.
+```
+
+**Legitimate exceptions:** A stateless request service may mark ready at startup and leave dependency failure to liveness, if documented. Stall thresholds are ops decisions.
+
+**Verification scenario:** Silence the feed past the threshold: readiness flips false and recovers without a restart; kill a worker: liveness trips; boot with a long catch-up: no restart.
+
+**Automatable check:** A lint banning SIGINT-only signal helpers, and an integration test asserting ready stays false until catch-up ends.
+
+Pack: `operations` (candidate). Topics: `operations`, `lifecycle`, `backend`, `frontend`, `implementation`.
+
+<a id="operations-alert-runbook-automation-level"></a>
+
+## Ship every alert with a runbook and permission level
+
+An alert rule ships with a human runbook link, a stable runbook slug, a severity and an automation permission: safe (an agent may run the listed remediation), unsafe (diagnose and report only) or none (informational). Anything missing from the registry defaults to unsafe. Routing is a tree where only production plus critical reaches the pager, so an alert missing its environment label can never page.
+
+**Apply when:** Adding or changing an alert, wiring automated diagnosis or remediation, or adding a telemetry dimension.
+
+**Boundary notes:** Start new alerts as unsafe and promote to safe only after watching real firings.
+
+**Checks:** Each rule has summary, description, runbook link and slug; the runbook covers likely causes, diagnosis, remediation, verification and escalation; the pager path requires the production label and critical severity; alert dimensions are fixed low-cardinality enums with no account ids, addresses, amounts or free-form error text; silences carry owner, reason, scope, expiry and a change reference and restore automatically; every rule names an owner and an escalation path.
+
+**Anti-pattern:** Page on any error count, or let an agent restart and replay without a written remediation.
+
+**Why it fails:** On-call learns to ignore noisy pages until a real money incident is missed, and an over-permitted agent can deepen an incident, for example by replaying a backlog that double counts.
+
+**Bad example (illustrative):**
+
+```text
+Rule: errors > 0 pages on-call; no runbook; the agent may remediate anything.
+```
+
+**Better example (illustrative):**
+
+```text
+Confirmed production integrity failures page with a runbook; warnings go to a visible channel; remediation stays unsafe until trusted.
+```
+
+**Legitimate exceptions:** Informational dashboards need no runbook. Thresholds, severity definitions and who gets paged are owner decisions; do not invent them.
+
+**Verification scenario:** Fire a test alert without the production label: it never pages. Fire one missing from the registry: automation only diagnoses.
+
+**Automatable check:** A CI lint that every alert rule has a slug present in the automation registry and a resolvable runbook link.
+
+Pack: `operations` (candidate). Topics: `operations`, `errors`, `backend`, `frontend`, `planning`.
+
+<a id="operations-edge-rate-limit-failure-posture"></a>
+
+## Rate limit at the edge with explicit failure posture
+
+Count requests with a sliding two-window estimate (current count plus the previous window weighted by its remaining share) so a burst cannot straddle a boundary. Key anonymous traffic by the client IP from the rightmost forwarded-for entry your own ingress appended, never the leftmost, and key money-moving categories per user. Decide failure posture per control: if the shared counter store is down, rate limiting fails open, new authentication fails closed, and money-moving actions that must never run unmetered fail closed.
+
+**Apply when:** Adding an endpoint category, touching proxy or IP extraction, adding a maintenance switch, or handling 429s in a client.
+
+**Boundary notes:** A maintenance switch blocks writes only (503), keeps reads up so balances and charts stay visible, and leaves its admin path writable so it can be turned off.
+
+**Checks:** Credential-accepting routes get the tightest cap; trusted internal services skip per-IP caps only with a verified service credential; responses carry limit, remaining, reset and Retry-After; the trusted hop count matches the real proxy chain; clients honor Retry-After, bound read retries and never auto-retry a mutation.
+
+**Anti-pattern:** Take the first X-Forwarded-For entry as the client IP.
+
+**Why it fails:** Any caller can pick their own bucket by sending a forged header, defeating brute-force and abuse limits, while a limiter that fails closed on a cache blip takes the whole API down.
+
+**Bad example (illustrative):**
+
+```text
+ip = headers['x-forwarded-for'].split(',')[0]
+```
+
+**Better example (illustrative):**
+
+```text
+ip = the rightmost entry our ingress appended (else the socket peer); orders and withdrawals keyed per user.
+```
+
+**Legitimate exceptions:** Behind several trusted proxies, take the entry at the trusted hop count from the right. Caps per category are ops and product decisions; source them.
+
+**Verification scenario:** Send a forged leftmost header: the bucket follows the real hop. Stop the counter store: reads pass, a new login fails, a money-moving claim fails closed.
+
+**Automatable check:** Unit tests for IP extraction with forged headers, plus a regression test replaying the header-spoof bypass.
+
+Pack: `operations` (candidate). Topics: `security`, `operations`, `backend`, `frontend`, `implementation`.
+
+<a id="operations-independent-source-correctness"></a>
+
+## Verify data against independent sources nightly
+
+A scheduled checker compares published data with independent sources (the chain itself, two or more external providers) and with self-consistency recomputations such as candles re-aggregated from trades. A field fails only when the independent sources agree with each other but disagree with you; a single external source can at most warn. The exit contract separates check failed from could not run, and a missing dependency reports skip, never a silent pass. Refines core card operations-audit-and-restore.
+
+**Apply when:** Publishing derived market, position or balance data, adding a decoder for a new protocol, or wiring a nightly data-quality job.
+
+**Boundary notes:** Never compare against a proxy of the same provider; that is circular evidence. Self-consistency checks catch pipeline bugs, not shared upstream errors.
+
+**Checks:** Exit 0 for pass with warnings allowed, 1 for a failure, 2 for could not execute; each check reports measured value, tolerance and offending samples; a canary pushes recent real transactions through the stateless decoder and fails when a protocol yields zero events across its sample (format drift); tolerances document known definitional differences; results reach a visible channel and a stored artifact.
+
+**Anti-pattern:** Alert whenever one provider disagrees, or treat a crashed checker as a pass.
+
+**Why it fails:** One flaky provider cries wolf until alerts are ignored, and a crash that looks green hides a decoder that silently stopped indexing a venue, so users miss trades and balances drift.
+
+**Bad example (illustrative):**
+
+```text
+if abs(ours - providerA) > tol then fail; on exception exit 0
+```
+
+**Better example (illustrative):**
+
+```text
+Fail only if providerA and providerB agree and both differ from ours; a missing dependency is SKIP; a crash exits 2.
+```
+
+**Legitimate exceptions:** Fields with no independent source get self-consistency checks only. Tolerances, cohorts and schedules are owner decisions.
+
+**Verification scenario:** Feed fixtures where one provider is wrong (warn), both agree against you (fail), and the node is unreachable (skip, exit 2).
+
+**Automatable check:** A scheduled CI job enforcing the exit contract, posting a digest and uploading the full report.
+
+Pack: `operations` (candidate). Topics: `operations`, `data`, `testing`, `backend`, `planning`.
+
+<a id="operations-ratchet-unfixable-rules"></a>
+
+## Ratchet rules you cannot deny outright
+
+A rule that already has violations would be switched off on day one if made a hard error, so turn its count into a committed ceiling (or floor) that may only improve. The gate fails when a ceiling rises or a floor falls, names the metric, and re-baselining is an explicit commit that says why. The per-site allowlist variant fails on new violations and on stale entries, so fixed debt must leave the list. Refines core card tests-risk-observable-behavior.
+
+**Apply when:** Introducing a lint or architecture rule into an existing codebase, or reviewing a PR that edits a baseline or allowlist.
+
+**Boundary notes:** A rule that is clean today goes straight to deny, and each rule lives in exactly one enforcement layer (compiler, ratchet, gate, hook, review) rather than repeated as a weaker reminder.
+
+**Checks:** The baseline is committed and moves only through the update command; counts read non-test source only; allowlist matching counts duplicates, so a second identical violation is still new; a stale entry fails with the sync command to run; rules with no existing debt, such as holding a lock across an await or a SIGINT-only shutdown helper, are denied outright.
+
+**Anti-pattern:** Add the rule as a warning nobody reads, or let the allowlist only grow.
+
+**Why it fails:** Warnings become noise, debt compounds, and an append-only allowlist hides regressions behind historical entries.
+
+**Bad example (illustrative):**
+
+```text
+Append the new violation to the allowlist in the same PR that introduces it.
+```
+
+**Better example (illustrative):**
+
+```text
+Fix the new site; when migrating an old one, delete its allowlist entry so the stale-entry check passes.
+```
+
+**Legitimate exceptions:** A deliberate re-baseline after a large refactor is fine when the commit explains it. Judgment-heavy rules can stay in review with examples.
+
+**Verification scenario:** Add one new violation: the gate fails naming it. Fix an allowlisted site without editing the list: the gate fails on the stale entry.
+
+**Automatable check:** A script comparing the current violation multiset with the committed allowlist, failing on new and stale entries alike.
+
+Pack: `operations` (candidate). Topics: `review`, `testing`, `modules`, `frontend`, `backend`.
+
+<a id="operations-split-release-authority-provenance"></a>
+
+## Split release preparation from production authority
+
+An engineer prepares a reviewable release PR that changes only version and changelog; after merge, a designated release manager creates an immutable version tag on that PR's exact merge SHA, never the moving tip of main. Before deploy credentials are used, a validator checks tag format, tagger identity, the merged release PR and the exact SHA. Tags are never moved or deleted: a failed rollout re-runs the same run, and rollback is a revert plus a new patch release.
+
+**Apply when:** Designing release workflows, cutting a patch, handling a failed production deploy, or editing release documentation.
+
+**Boundary notes:** Patch branches are cut from the deployed tag and receive reviewed cherry-picks of squash commits; release metadata commits never cross between lines.
+
+**Checks:** Only the release manager can create tags and nobody can update or delete them; preparation fails closed on unprotected or mismatched branches; every surface of a multi-surface release deploys the same SHA; each gate the release doc claims maps to an existing workflow job, because docs that still describe a removed validator give false assurance.
+
+**Anti-pattern:** Tag whatever main points to after the release PR merges, or re-tag a version after a hotfix.
+
+**Why it fails:** Unreviewed commits ride into production under a reviewed version, and a moved tag destroys provenance so nobody can say which code ran.
+
+**Bad example (illustrative):**
+
+```text
+git tag v1.4.0 origin/main; later git tag -f v1.4.0 after a hotfix
+```
+
+**Better example (illustrative):**
+
+```text
+Tag v1.4.0 at the release PR merge SHA; for a bad release, revert on main and tag v1.4.1.
+```
+
+**Legitimate exceptions:** A single-maintainer project may combine roles if the tag still pins an exact reviewed SHA. Who holds release authority is an organizational decision.
+
+**Verification scenario:** Push a tag as a non-manager and try to move an existing tag: both are rejected; a tag on a non-release SHA fails validation before any deploy step.
+
+**Automatable check:** A pre-deploy job validating tag format, tagger identity and merge SHA, plus a docs check that referenced workflow files exist.
+
+Pack: `operations` (candidate). Topics: `release`, `security`, `frontend`, `backend`, `planning`.
+
+<a id="operations-gitops-tag-pattern-promotion"></a>
+
+## Promote environments through Git and strict tag patterns
+
+Cluster state lives in Git and a controller syncs it with self-heal (manual drift is reverted) and prune (resources deleted from Git are removed). Dev auto-tracks build tags matching a strict main-build pattern (timestamp plus commit SHA); production accepts only strict release tags, so promotion means cutting a reviewed release, not editing the cluster. Dependency order such as storage, then secrets, then apps is declared as explicit sync waves.
+
+**Apply when:** Adding a service to the cluster, changing image update policy, pinning a version during an incident, or debugging why a deploy did not happen.
+
+**Boundary notes:** Under a newest-build policy the updater picks the most recently built matching image, not the highest tag, so rollback means a new, higher release.
+
+**Checks:** Tag patterns are anchored and environment-exclusive, so a dev tag can never match production; release images also carry the commit SHA for traceability; an incident pin is a reviewed change or a documented updater pause with an owner and end condition, reverted afterwards; configuration changes go through PR review; secrets come from the external secret store, never from manifests.
+
+**Anti-pattern:** Edit the production workload in the cluster by hand to swap an image.
+
+**Why it fails:** Self-heal silently reverts it, or with self-heal off Git stops describing production, so the next sync undoes the fix mid-incident and nobody can audit what ran.
+
+**Bad example (illustrative):**
+
+```text
+Set the production image to a latest tag directly with the cluster CLI.
+```
+
+**Better example (illustrative):**
+
+```text
+Cut the release tag, or merge a reviewed change pinning the exact tag, and let the controller sync.
+```
+
+**Legitimate exceptions:** Hosts outside the controller follow their own reviewed deploy path. Pause automation only with an owner and an end condition.
+
+**Verification scenario:** Push a dev-pattern tag: only dev updates. Push a malformed tag: nothing updates. Hand-edit a production object: it reverts on the next sync.
+
+**Automatable check:** A policy test asserting every updater tag pattern is anchored and environment-exclusive.
+
+Pack: `operations` (candidate). Topics: `release`, `operations`, `backend`, `planning`.
+
+<a id="operations-preview-deploy-safety"></a>
+
+## Keep previews and deploys current, scoped and coupled
+
+Decide whether a PR needs a preview from its file list via the API before checking out untrusted PR code, skipping docs- or tests-only changes, and treat a truncated file list as needing one. Deploy credentials live only in the deploy job, never in the validation runner. A main-branch deploy re-checks that main has not moved before build, deploy and alias, and stops if it has. Surfaces that must match (an app and its auth surface) are coupled through a published build ref, and the deploy refuses on mismatch.
+
+**Apply when:** Editing CI or CD workflows, adding a deploy target, or adding a second surface with a version dependency.
+
+**Boundary notes:** The CI build used for browser tests embeds mocks and test endpoints and is never the deployable artifact; the deployable build is made against the real environment and smoke-tested without rebuilding.
+
+**Checks:** Forks, drafts and bot PRs never receive secrets; validation checkouts do not persist credentials; required production build variables fail the build when missing; build output is validated before deploy; preview concurrency is per PR and production is serialized; smoke tests hit real routes after deploy.
+
+**Anti-pattern:** Build PR code inside a job that holds deploy tokens, or deploy whatever commit the run started with.
+
+**Why it fails:** A malicious or careless PR can exfiltrate tokens, and an older run can overwrite a newer deploy and point a shared alias at stale code.
+
+**Bad example (illustrative):**
+
+```text
+On a PR event, check out the PR head and build it with the deploy token in the environment.
+```
+
+**Better example (illustrative):**
+
+```text
+List PR files via the API, skip when only safe paths changed, build in the deploy job, and re-check the main SHA before deploy and alias.
+```
+
+**Legitimate exceptions:** Repos without outside contributors may relax the pre-checkout step but should keep secret scoping. Which paths count as safe is a team decision.
+
+**Verification scenario:** Merge two PRs in quick succession: the first run skips its deploy or alias once main moves. Open a docs-only PR: no preview job checks out code.
+
+**Automatable check:** A workflow lint asserting secrets appear only in deploy jobs and that main deploys re-check the ref before aliasing.
+
+Pack: `operations` (candidate). Topics: `release`, `security`, `web-app`, `frontend`, `implementation`.
+
+<a id="operations-supply-chain-baseline"></a>
+
+## Harden dependency intake and the CI supply chain
+
+When a PR changes the dependency surface, validate its exact head in an isolated checkout with an uncached immutable install, lockfile checksum enforcement and lifecycle scripts disabled. Refuse to resolve package versions younger than a minimum age, and give the dependency bot the same cooldown plus grouped updates. Pin CI actions and downloaded tools by commit SHA or checksum, scan the PR commit range for secrets with a justified allowlist, and require code-owner review for workflows, scripts and dependency files. Refines core card dependency-reproducibility.
+
+**Apply when:** Adding or updating a dependency, editing CI workflows, adding a tool download, or touching lockfiles or package-manager configuration.
+
+**Boundary notes:** The age gate works at resolution time; a lockfile that already pins a young version is not re-judged, which is why the bot cooldown exists. Emergency exceptions are explicit and code-owner reviewed.
+
+**Checks:** Dependency-surface detection includes renamed paths and treats a truncated file list as changed; the secret scanner redacts output and each allowlist entry is scoped to a rule and path with a written reason; ownership rules put the strictest workflow rule last so it wins over broader dependency patterns; the age gate and bot cooldown agree.
+
+**Anti-pattern:** Run a cached install with lifecycle scripts enabled on PR code, or reference actions by mutable tag.
+
+**Why it fails:** A compromised package or action runs arbitrary code with CI secrets before anyone reviews it, and a mutable tag can be repointed after review.
+
+**Bad example (illustrative):**
+
+```text
+uses: some/action@v3, and every PR runs a cached install with scripts on
+```
+
+**Better example (illustrative):**
+
+```text
+uses: some/action@<full commit sha>; dependency PRs run an immutable, scripts-off install in an isolated checkout.
+```
+
+**Legitimate exceptions:** Packages that truly need install scripts are allowed individually after review. Minimum age and cooldown length are owner policy values.
+
+**Verification scenario:** Open a PR adding a version published yesterday: resolution fails. Open a PR touching a workflow: it cannot merge without the workflow owner.
+
+**Automatable check:** A workflow lint rejecting non-SHA action references, and a CI step scanning base..head for secrets.
+
+Pack: `operations` (candidate). Topics: `security`, `release`, `modules`, `frontend`, `review`.
+
+<a id="operations-fail-safe-diff-scoped-ci"></a>
+
+## Scope CI by diff but fail safe
+
+Diff-based selection may skip work only for an explicit allowlist of safe paths: anything unknown runs, CI and test-infrastructure changes run everything, and a diff that cannot be resolved is an error, not a skip. A mandatory floor of critical tests (auth refresh, socket auth, idempotency keys, order admission and recovery) runs on every change. Money operations live in a registry that maps each one to its source files, request variants, idempotency policy and journeys asserting exact mutation counts.
+
+**Apply when:** Adding test selection, adding a money operation, moving files on a critical path, or reviewing why a check was skipped.
+
+**Boundary notes:** Deletes, renames and dependency or config changes force the full suite, because affected-test analysis cannot see removed edges.
+
+**Checks:** Renames count both paths; every registry path resolves to an existing file, so a stale mapping fails a test; every outcome (terminal, partial, ambiguous, stale account) has evidence or an explicit gap with an owner; browser journeys assert exactly one mutation per deliberate action plus the final recoverable state; release receipts bind evidence to the exact release SHA with artifact digests.
+
+**Anti-pattern:** Run end-to-end tests only when the diff touches a hand-maintained list of risky folders.
+
+**Why it fails:** New critical code outside the list ships untested and a moved file silently drops out of coverage, so a duplicate or missing order reaches production.
+
+**Bad example (illustrative):**
+
+```text
+run_e2e = changed paths match the risky-folders list
+```
+
+**Better example (illustrative):**
+
+```text
+run_e2e = not (every changed path matches the safe allowlist); the critical floor always runs.
+```
+
+**Legitimate exceptions:** Docs-only PRs can skip browser suites. Do not grow the floor for cosmetic coverage; it exists for regressions that lose money or lock users out.
+
+**Verification scenario:** Change a file outside any known pattern: selection runs. Rename a registry-mapped file: the mapping test fails. Pass an invalid diff range: the selector errors.
+
+**Automatable check:** Selector unit tests over path fixtures, plus a registry test asserting every mapped source exists.
+
+Pack: `operations` (candidate). Topics: `testing`, `money`, `release`, `frontend`, `planning`.
+
+<a id="operations-resilience-game-day-budgets"></a>
+
+## Budget fault scenarios with explicit resilience thresholds
+
+Define client fault scenarios as data: each has a load profile, an abort criterion, an owner, a test anchor and numeric budgets for request amplification, request count, retries, mutation count (zero for read faults), peak and steady sockets, reconnect attempts, queued work, heap growth, diagnostic episodes and recovery time. Each run produces one receipt per scenario, and evaluation fails on a missing or duplicate receipt, the wrong environment, any exceeded budget, or a required degraded or recovered state that never became visible.
+
+**Apply when:** Changing retry, reconnect, polling, socket sharing, visibility or offline handling, or claiming a resilience improvement.
+
+**Boundary notes:** Typical scenarios: rate-limited reads, reconnect storms, multi-tab fan-out, rapid visibility changes, offline and online, malformed frame bursts, an unavailable data provider, and stale prices shown as estimates until a live quote returns.
+
+**Checks:** Budgets sit tighter than the failure they guard (one socket per tab, zero mutations during read faults); diagnostics collapse into episodes by cooldown so a burst counts once; runs use a production build with deterministic mocks; stale data is never presented as live; recovery time runs from fault end to the visible recovered state.
+
+**Anti-pattern:** Judge resilience by eyeballing one reconnect in a dev build.
+
+**Why it fails:** Amplification and leaks appear only under repeated faults; a retry loop can multiply load during an outage, or a reconnect can resend an order, hurting users exactly when systems are stressed.
+
+**Bad example (illustrative):**
+
+```text
+it('reconnects', () => { disconnect(); expect(connected).toBe(true) })
+```
+
+**Better example (illustrative):**
+
+```text
+Run the reconnect-storm scenario: three disconnects, one live socket, no request or queue growth, recovery within budget, zero mutations.
+```
+
+**Legitimate exceptions:** Budgets are engineering targets, not user-facing SLAs; derive them from measured baselines. Skip scenarios for faults the product cannot encounter.
+
+**Verification scenario:** Introduce a duplicate-reconnect bug: the peak-socket and reconnect budgets fail the evaluation; remove it and the receipt passes.
+
+**Automatable check:** A manifest validator plus a receipt evaluator in CI that fails on missing, duplicate or over-budget scenarios.
+
+Pack: `operations` (candidate). Topics: `testing`, `realtime`, `performance`, `frontend`, `review`.
 
 <a id="realtime-live-coverage-before-snapshot"></a>
 

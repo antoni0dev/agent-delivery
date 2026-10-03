@@ -205,6 +205,7 @@ test('check rejects a pack with a missing section, a duplicate id or a disallowe
     [{ 'sample.json': mutated(pack => { pack.cards[1].id = pack.cards[0].id; }) }, /card sample-release-notes-owner: duplicate card id/],
     [{ 'state.json': mutated(pack => { pack.pack = 'state'; pack.cards[0].id = 'state-single-owner'; pack.cards[1].id = 'state-feature-flag-cleanup'; }) }, /card state-single-owner: duplicate card id/],
     [{ 'sample.json': mutated(pack => { pack.cards[0].topics = ['astrology', 'backend', 'review']; }) }, /topic "astrology" is not allowed/],
+    [{ 'sample.json': mutated(pack => { pack.cards[0].content = pack.cards[0].content.replace('is tagged.', 'is tagged. Refines core card no-such-card.'); }) }, /card sample-release-notes-owner: references unknown card "no-such-card"/],
   ];
   for (const [packs, expected] of cases) {
     const result = node(join(harnessCopy(t, packs), 'scripts/check.mjs'));

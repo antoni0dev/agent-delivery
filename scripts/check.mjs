@@ -160,6 +160,15 @@ for (const file of packFiles) {
     sectionProblems(card.content).forEach(cardProblem);
   });
 }
+const referencePattern = /(?:core|pack) cards? ([a-z0-9-]+(?:(?:, | and )[a-z0-9-]+)*)/g;
+for (const file of packFiles) {
+  const pack = parseJson(readFileSync(join(packDirectory, file), 'utf8'));
+  for (const card of Array.isArray(pack?.cards) ? pack.cards : []) {
+    if (typeof card?.content !== 'string') continue;
+    for (const [, list] of card.content.matchAll(referencePattern))
+      for (const id of list.split(/, | and /)) if (!cardIds.has(id)) packProblems.push(`knowledge/packs/${file}: card ${card.id}: references unknown card "${id}"`);
+  }
+}
 if (packProblems.length) throw new Error(`Knowledge pack validation failed:\n${packProblems.join('\n')}`);
 
 execFileSync(process.execPath, [fileURLToPath(new URL('scripts/render-knowledge-guide.mjs', root)), '--check'], { stdio: 'inherit' });

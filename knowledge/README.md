@@ -26,6 +26,7 @@ Work in the harness repository:
 2. Name each card `<pack>-<slug>` in kebab case, at most 60 characters and unique across core and pack cards.
 3. Give each card 2-5 topics from `topics.json` or `money`, `quotes`, `chain`, `signing`, `execution`, `contracts`, `release`, `security`, `web-app`, `frontend` and `backend`. Include `frontend` or `backend`, and `planning`, `implementation` or `review`.
 4. Write 800-3200 characters of content: a `## ` title, a rule paragraph, then these bold labels in order, each starting its own paragraph: `**Apply when:**`, optional `**Boundary notes:**`, `**Checks:**`, `**Anti-pattern:**`, `**Why it fails:**`, `**Bad example (illustrative):**` and `**Better example (illustrative):**` (one line each), `**Legitimate exceptions:**`, `**Verification scenario:**` and optional `**Automatable check:**`.
-5. Run `node scripts/render-knowledge-guide.mjs`, then `npm run check`.
+5. Reference related guidance by ID, as in `Refines core card <id>.` or `pack card <id>`; the check rejects references to unknown cards.
+6. Run `node scripts/render-knowledge-guide.mjs`, then `npm run check`.
 
 The check also scans packs, roles, skills, templates, docs, `WORKFLOW.md` and `README.md` for private key headers, 0x-prefixed 64-hex values and absolute home-directory paths. List private terms such as company, people or project names in `.local/deny-terms.txt`, one case-insensitive term per line; lines starting with `#` are comments, and the file is git-ignored. Findings name only the category, file and card or line, never the matched text.

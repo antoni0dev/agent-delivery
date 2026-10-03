@@ -1,6 +1,6 @@
 # Agent delivery: portable engineering harness
 
-Use one AI client to lead parallel engineering work. This repository supplies shared manager instructions, specialist roles, skills and 58 engineering reference cards. Your chosen client supplies the agents and tools.
+Use one AI client to lead parallel engineering work. This repository supplies shared manager instructions, specialist roles, skills, 58 engineering reference cards, and a concrete TypeScript and React pattern cookbook. Your chosen client supplies the agents and tools.
 
 The v0.2 harness has no custom controller, SQL database, runtime adapter, proof cache or background daemon. It does not require using several AI clients together. The earlier controller is historical software, not a prerequisite for this workflow.
 
@@ -28,6 +28,7 @@ Read [Migration](docs/migration.md) before replacing an existing controller inst
 - `roles/`: focused responsibilities for initiative owners, workers, reviewers and QA.
 - `skills/`: manager, knowledge-selection, ticket-shaping, independent PR audit, scoped QA and repository-check procedures.
 - `knowledge/`: the complete existing card library, anti-patterns, examples, coverage inventory and historical audit metadata.
+- `patterns/`: selectable implementation recipes for reusable hooks, utilities, components and architecture patterns.
 - `templates/`: repository configuration and resumable initiative notes.
 
 The knowledge files are preserved unchanged in this simplification. That preservation is not a fresh audit of every original source. See [Knowledge](docs/knowledge.md) for what the records establish and their limits. No general redistribution license is granted by this repository.

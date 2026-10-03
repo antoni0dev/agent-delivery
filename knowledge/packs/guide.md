@@ -1156,11 +1156,11 @@ Pack: `execution` (candidate). Topics: `frontend`, `errors`, `execution`, `imple
 
 ## Type unknown and partial outcomes explicitly
 
-After a request is sent, a success response that fails contract validation is an unknown outcome: the order may exist, so the user is told to check orders before trying again, never that it failed. A multi-target submission (several wallets, legs or chains) normalizes to a discriminated result whose submitted or failed list is typed non-empty for its variant, with a retryable flag on every failed target. Refines core card mutations-confirmed-reconciliation.
+After a request is sent, a success response that fails contract validation is an unknown outcome: the order may exist, so the user is told to check orders before trying again, never that it failed. A multi-target submission normalizes to one discriminated outcome per requested target: submitted or confirmed, definitely rejected, proved not-started, or unknown with its original operation and reconciliation handle. Retryability applies only to definitely rejected or proved not-started targets under the contract; unknown is never offered a fresh-key retry. Refines core card mutations-confirmed-reconciliation.
 
 **Apply when:** a mapper parses a create-order, transfer or batch response, or UI renders outcomes of a fan-out.
 
-**Checks:** outcome count equals requested targets; each target appears exactly once and was requested; submitted outcomes carry an id unique within the response; failed outcomes carry a non-empty code and a boolean retryable; a group id is required exactly when the request fanned out; any violation raises a contract error that the UI renders as unknown and telemetry records as contract-unknown; retry is offered only on retryable failed targets, as a new action.
+**Checks:** outcome count equals requested targets; each target appears exactly once; submitted outcomes carry a unique id; rejected outcomes carry a stable code and sourced retry policy; not-started includes dispatch proof; unknown carries the stable operation id and lookup path; group id is required exactly for fan-out; any schema violation makes affected targets unknown; fresh action is offered only for proved not-started or definite rejection.
 
 **Anti-pattern:** Coerce a malformed body into success or failure, collapse a mixed result into one notification, or default missing per-target fields.
 
@@ -1175,12 +1175,12 @@ if (!res.orderId) throw new Error('Order failed')
 **Better example (illustrative):**
 
 ```text
-type Result = { kind: 'submitted'; submitted: NonEmpty<Sub>; failed: Fail[] } | { kind: 'failed'; failed: NonEmpty<Fail> }
+type TargetOutcome = Submitted | Rejected | NotStarted | Unknown; type Result = { groupId: string; outcomes: NonEmpty<TargetOutcome> }
 ```
 
 **Legitimate exceptions:** A single-target endpoint with a strict generated schema needs only that validation. Unknown-outcome and partial-success copy is a product decision and must be sourced.
 
-**Verification scenario:** Feed a 2xx body missing one target, one with a duplicate id, and a mixed two-target result: the first two render unknown, the third renders per target with retry only on the retryable failed leg.
+**Verification scenario:** Feed missing target, duplicate id, committed-response-lost, definite rejection and internal-deadline remainder; verify affected unknown keeps its original id, rejection follows sourced policy, not-started alone can use a fresh approved action, and no submitted or unknown target is resent.
 
 Pack: `execution` (candidate). Topics: `frontend`, `types`, `errors`, `execution`, `implementation`.
 
@@ -2044,13 +2044,13 @@ Pack: `money` (candidate). Topics: `authorization`, `quotes`, `frontend`, `backe
 
 ## Admit third-party swap calldata through one ordered guard
 
-Aggregator calldata is untrusted until one admission function, the only path to an executable plan, accepts it after fixed-order checks where the first failure wins. It bounds blast radius (what is called and approved, how much native value moves, how far the provider's numbers may go), not price; a ceiling against an in-house quote catches unit bugs. The guard decodes the supported calldata shape and proves the actual recipient is the intended account and the executed minimum output is at least the user-confirmed floor. If recipient or floor cannot be decoded and enforced before signing, the plan is non-executable and stays in shadow or in-house. Provider metadata alone never proves what its calldata executes. Refines core card types-boundary-validation.
+Aggregator calldata is untrusted until one admission function, the only path to an executable plan, accepts it after fixed-order checks where the first failure wins. It bounds blast radius (what is called and approved, how much native value moves, how far the provider's numbers may go), not price; a ceiling against an in-house quote catches unit bugs. The guard decodes the supported calldata shape and proves the chain-specific target, input asset, exact input amount, output asset, recipient, minimum output and deadline all equal or safely enforce the user-confirmed intent. If any intent field cannot be decoded and enforced before signing, the plan is non-executable and stays in shadow or in-house. Provider metadata alone never proves what its calldata executes. Refines core card types-boundary-validation.
 
 **Apply when:** integrating an aggregator or solver that returns calldata, a spender or a min-out, or adding a provider or chain.
 
 **Boundary notes:** calldata your own router builds needs input validation, not this guard. Run new providers in shadow (priced, metered, never executed) until refusals read zero.
 
-**Checks:** in order: supported selector and calldata decoder; decoded recipient equals the intended account; decoded minimum output meets the confirmed floor; slippage at most 10,000 bps; target allowlisted; no spender for native-in, a vouched one for token-in; any extra call a zero-value approve of a route token to an accepted spender; native value exactly the swap's native spend (zero for token-in); chain echo matches; output decimals known; output non-zero; floor not above quote; no overflow; echoed floor at least quote less requested slippage. Refusals feed an alerting must-be-zero counter.
+**Checks:** in order: supported selector and calldata decoder; decoded chain target matches the intent registry; input asset and exact amount match; output asset matches; recipient equals the intended account; deadline has not changed or expired; decoded minimum output meets the confirmed floor; slippage at most 10,000 bps; target allowlisted; no spender for native-in, a vouched one for token-in; any extra call a zero-value approve of a route token to an accepted spender; native value exactly the swap's native spend (zero for token-in); chain echo matches; output decimals known; output non-zero; floor not above quote; no overflow; echoed floor at least quote less requested slippage. Refusals feed an alerting must-be-zero counter.
 
 **Anti-pattern:** Execute the best-quoting provider's calldata, trusting its own spender, value and min-out fields.
 
@@ -2065,12 +2065,12 @@ if (ext.quotedOut > own.quotedOut) send({ to: ext.to, data: ext.data, value: ext
 **Better example (illustrative):**
 
 ```text
-decoded = decodeSupportedCall(ext.data); requireRecipientAndFloor(decoded, intent); plan = guard.check(decoded, ext, allowlist); preflight(plan)
+decoded = decodeSupportedCall(ext.data); requireExactIntent(decoded, intent, chainRegistry); plan = guard.check(decoded, ext, allowlist); preflight(plan)
 ```
 
 **Legitimate exceptions:** An unpinnable router that redeploys, an upgradeable-proxy allowlist or unlimited approvals each need an explicit owner decision.
 
-**Verification scenario:** Feed unsupported selector, undecodable calldata, wrong recipient, loose decoded floor, mismatched provider floor, unlisted target, wrong spender or value, wrong chain and absurd quote; verify every plan is refused before signing.
+**Verification scenario:** Feed unsupported selector, undecodable field, wrong chain target, input asset or amount, output asset, recipient, deadline or floor, plus mismatched provider metadata, spender and value; verify every plan is refused before signing.
 
 Pack: `money` (candidate). Topics: `execution`, `security`, `contracts`, `backend`, `review`.
 

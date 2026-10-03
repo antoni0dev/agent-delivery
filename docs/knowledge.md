@@ -10,6 +10,14 @@ Start with `topics.json` or the selector, then read full applicable cards from `
 
 Rules express stable constraints. Cards compare architecture choices. Anti-patterns explain concrete failure mechanisms. Skills describe procedures. Roles establish independent responsibility. Actual tests and review establish whether the resulting code is correct; none of these replaces the others.
 
+## Use the pattern cookbook
+
+The separate `patterns/` directory turns selected card guidance into concrete TypeScript and React recipes. It includes exhaustive matching, explicit query state, query transformations and dependencies, provider factories, persistent state, resolver registries, render-prop flows, typed navigation, form boundaries and focused hooks.
+
+Start with `patterns/catalog.json`, read only the matching recipe, and include its related cards in the task packet. The examples are copy-ready starting points, not an importable framework. Adapt them to the destination repository's framework versions, module boundaries, error model and approved behavior. Copy only patterns whose stated pressure exists, then remove unused helpers.
+
+The cookbook is maintained independently from the preserved 58-card release. Adding or editing a recipe does not rewrite the historical card audit or imply that the recipe has inherited its approval. Repository checks validate catalog integrity and installation, while implementation correctness still requires destination tests and review.
+
 ## Historical records
 
 | Artifact | What it preserves |

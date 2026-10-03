@@ -1,0 +1,117 @@
+{
+  "schemaVersion": 1,
+  "patterns": [
+    {
+      "id": "exhaustive-branching",
+      "title": "Exhaustive branching",
+      "kind": ["utility", "component"],
+      "topics": ["branching", "types", "components"],
+      "recipe": "recipes/exhaustive-branching.md",
+      "relatedCards": ["types-boundary-validation", "ui-branching-explicitness"]
+    },
+    {
+      "id": "boundary-result-utilities",
+      "title": "Boundary assertions and recoverable results",
+      "kind": ["utility"],
+      "topics": ["boundaries", "errors", "types"],
+      "recipe": "recipes/boundary-result-utilities.md",
+      "relatedCards": ["types-boundary-validation", "lifecycle-readiness-and-user-feedback"]
+    },
+    {
+      "id": "provider-factories",
+      "title": "Strict provider factories",
+      "kind": ["hook", "component", "utility"],
+      "topics": ["state", "providers", "components"],
+      "recipe": "recipes/provider-factories.md",
+      "relatedCards": ["state-single-owner", "state-location-and-provider-contracts"]
+    },
+    {
+      "id": "explicit-query-state",
+      "title": "Explicit query state and MatchQuery",
+      "kind": ["component", "type"],
+      "topics": ["query", "components", "errors"],
+      "recipe": "recipes/explicit-query-state.md",
+      "relatedCards": ["queries-explicit-async-states", "ui-branching-explicitness"]
+    },
+    {
+      "id": "query-transforms",
+      "title": "Synchronous and asynchronous query transforms",
+      "kind": ["hook", "utility"],
+      "topics": ["query", "cache", "data"],
+      "recipe": "recipes/query-transforms.md",
+      "relatedCards": ["queries-explicit-async-states", "cache-identity-and-invalidation", "functional-composition-pipelines"]
+    },
+    {
+      "id": "conditional-dependent-queries",
+      "title": "Conditional and dependent queries",
+      "kind": ["hook"],
+      "topics": ["query", "cache", "state"],
+      "recipe": "recipes/conditional-dependent-queries.md",
+      "relatedCards": ["queries-explicit-async-states", "cache-identity-and-invalidation"]
+    },
+    {
+      "id": "query-composition-invalidation",
+      "title": "Query composition and owned invalidation",
+      "kind": ["hook", "utility"],
+      "topics": ["query", "cache", "mutations"],
+      "recipe": "recipes/query-composition-invalidation.md",
+      "relatedCards": ["cache-identity-and-invalidation", "mutations-confirmed-reconciliation"]
+    },
+    {
+      "id": "validated-persistent-state",
+      "title": "Validated persistent external state",
+      "kind": ["hook", "boundary"],
+      "topics": ["state", "storage", "boundaries"],
+      "recipe": "recipes/validated-persistent-state.md",
+      "relatedCards": ["storage-versioned-boundary", "react-external-store-snapshots", "lifecycle-readiness-and-user-feedback"]
+    },
+    {
+      "id": "resolver-registry",
+      "title": "Exhaustive resolver registries",
+      "kind": ["pattern", "utility"],
+      "topics": ["variants", "modules", "types"],
+      "recipe": "recipes/resolver-registry.md",
+      "relatedCards": ["patterns-costed-selection", "modules-public-contracts", "types-boundary-validation"]
+    },
+    {
+      "id": "functional-pipelines",
+      "title": "Typed functional pipelines",
+      "kind": ["utility", "pattern"],
+      "topics": ["data", "types", "composition"],
+      "recipe": "recipes/functional-pipelines.md",
+      "relatedCards": ["functional-composition-pipelines"]
+    },
+    {
+      "id": "render-prop-flow-primitives",
+      "title": "Render-prop flow primitives",
+      "kind": ["component", "hook"],
+      "topics": ["components", "composition", "state"],
+      "recipe": "recipes/render-prop-flow-primitives.md",
+      "relatedCards": ["components-composition-contracts", "components-cohesive-ownership"]
+    },
+    {
+      "id": "typed-view-navigation",
+      "title": "Typed in-memory view navigation",
+      "kind": ["component", "hook", "pattern"],
+      "topics": ["navigation", "state", "types"],
+      "recipe": "recipes/typed-view-navigation.md",
+      "relatedCards": ["navigation-state-contracts", "state-single-owner"]
+    },
+    {
+      "id": "form-submission-contract",
+      "title": "Form submission contract",
+      "kind": ["utility", "pattern"],
+      "topics": ["forms", "mutations", "components"],
+      "recipe": "recipes/form-submission-contract.md",
+      "relatedCards": ["mutations-confirmed-reconciliation", "lifecycle-readiness-and-user-feedback"]
+    },
+    {
+      "id": "focused-ui-hooks",
+      "title": "Focused UI hooks",
+      "kind": ["hook"],
+      "topics": ["components", "state", "effects"],
+      "recipe": "recipes/focused-ui-hooks.md",
+      "relatedCards": ["custom-hooks-intent-boundaries", "effects-external-sync", "react-render-purity-and-identity"]
+    }
+  ]
+}

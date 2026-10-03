@@ -21,7 +21,7 @@ Copy the following generic files without replacing existing custom files:
 
 | Source in this harness | Destination in your repository |
 | --- | --- |
-| `WORKFLOW.md`, `roles/`, `knowledge/` | Same names under `.agent-harness/` |
+| `WORKFLOW.md`, `roles/`, `knowledge/`, `patterns/` | Same names under `.agent-harness/` |
 | `docs/knowledge.md`, `docs/readiness.md` | Same names under `.agent-harness/docs/` |
 | `templates/initiative.md` | `.agent-harness/templates/initiative.md` |
 | `templates/PROJECT.md` | `.agent-harness/PROJECT.md`, only if absent |
@@ -33,11 +33,11 @@ A manual copy does not create an installer ownership manifest. Update it by revi
 
 ## Project configuration and use
 
-Installation places the workflow, roles, knowledge and templates in `.agent-harness/` and the six skills in the selected client's repository skill directory. Preserve existing team instructions and unrelated settings. Do not overwrite local project decisions on upgrades; review any managed-file conflicts the installer reports.
+Installation places the workflow, roles, knowledge, pattern cookbook and templates in `.agent-harness/` and the seven skills in the selected client's repository skill directory. Preserve existing team instructions and unrelated settings. Do not overwrite local project decisions on upgrades; review any managed-file conflicts the installer reports.
 
 Fill `.agent-harness/PROJECT.md` from this repository's sources: tracker scope, branch permissions, models, dependency setup, checks, QA environment and existing ownership. Reference credentials through the destination's normal tools; never copy them into the harness or portable upstream repository. Decide with the team which generic files may be committed; keep company-private configuration and execution notes local where required.
 
-Check that the client discovers `engineering-manager`, `engineering-knowledge`, `shape-linear-ticket`, `pr-audit`, `project-qa` and `quality-gates`. A client that cannot discover skills can read `.agent-harness/WORKFLOW.md` explicitly. Verify its actual native subagent/model controls; an installed skill does not manufacture missing capabilities.
+Check that the client discovers `engineering-manager`, `engineering-knowledge`, `engineering-patterns`, `shape-linear-ticket`, `pr-audit`, `project-qa` and `quality-gates`. A client that cannot discover skills can read `.agent-harness/WORKFLOW.md` explicitly. Verify its actual native subagent/model controls; an installed skill does not manufacture missing capabilities.
 
 Try one bounded initiative:
 
@@ -51,6 +51,9 @@ Read `knowledge/topics.json` to choose topics and `knowledge/guide.md` or `cards
 node .agent-harness/scripts/select.mjs --list
 node .agent-harness/scripts/select.mjs --topic state
 node .agent-harness/scripts/select.mjs --card state-single-owner
+node .agent-harness/scripts/select.mjs --list-patterns
+node .agent-harness/scripts/select.mjs --pattern-topic query
+node .agent-harness/scripts/select.mjs --pattern explicit-query-state
 ```
 
 The manager shares selected full card content and exceptions with workers and reviewers. Do not treat a topic match or read receipt as proof of engineering quality.

@@ -10,10 +10,40 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 test('optional knowledge check works from a checkout path containing spaces', t => {
   const directory = mkdtempSync(join(tmpdir(), 'harness with spaces-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
-  for (const name of ['knowledge', 'scripts', 'WORKFLOW.md', 'templates', 'skills', 'docs'])
+  for (const name of ['knowledge', 'patterns', 'scripts', 'WORKFLOW.md', 'templates', 'skills', 'docs'])
     cpSync(join(root, name), join(directory, name), { recursive: true });
   const result = spawnSync(process.execPath, [join(directory, 'scripts/check.mjs')], { encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
+});
+
+test('pattern catalog validation rejects selector-breaking field shapes', t => {
+  const directory = mkdtempSync(join(tmpdir(), 'harness-pattern-catalog-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  for (const name of ['knowledge', 'patterns', 'scripts', 'WORKFLOW.md', 'templates', 'skills', 'docs'])
+    cpSync(join(root, name), join(directory, name), { recursive: true });
+  const catalogPath = join(directory, 'patterns/catalog.json');
+  const catalog = JSON.parse(readFileSync(catalogPath, 'utf8'));
+  catalog.patterns[0].topics = 'branching';
+  writeFileSync(catalogPath, JSON.stringify(catalog, null, 2) + '\n');
+  const result = spawnSync(process.execPath, [join(directory, 'scripts/check.mjs')], { encoding: 'utf8' });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /slug topics/);
+});
+
+test('pattern selector accepts topic names inherited by ordinary objects', t => {
+  const directory = mkdtempSync(join(tmpdir(), 'harness-pattern-topic-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  for (const name of ['knowledge', 'patterns', 'scripts', 'WORKFLOW.md', 'templates', 'skills', 'docs'])
+    cpSync(join(root, name), join(directory, name), { recursive: true });
+  const catalogPath = join(directory, 'patterns/catalog.json');
+  const catalog = JSON.parse(readFileSync(catalogPath, 'utf8'));
+  catalog.patterns[0].topics = ['constructor'];
+  writeFileSync(catalogPath, JSON.stringify(catalog, null, 2) + '\n');
+  const check = spawnSync(process.execPath, [join(directory, 'scripts/check.mjs')], { encoding: 'utf8' });
+  assert.equal(check.status, 0, check.stderr);
+  const select = spawnSync(process.execPath, [join(directory, 'scripts/select.mjs'), '--pattern-topic', 'constructor'], { encoding: 'utf8' });
+  assert.equal(select.status, 0, select.stderr);
+  assert.match(select.stdout, /Pattern: exhaustive-branching/);
 });
 
 function checkout(t) {
@@ -62,8 +92,12 @@ test('installed selector returns actual card content and rejects unknown selecto
   assert.match(select('--list').stdout, /state:.*state-single-owner/);
   assert.match(select('--topic', 'state').stdout, /Keep one mutable owner/);
   assert.match(select('--card', 'state-single-owner').stdout, /Anti-pattern/);
+  assert.match(select('--list-patterns').stdout, /explicit-query-state: Explicit query state and MatchQuery/);
+  assert.match(select('--pattern-topic', 'query').stdout, /Pattern: explicit-query-state/);
+  assert.match(select('--pattern', 'query-transforms').stdout, /Synchronous and asynchronous query transforms/);
   assert.notEqual(select('--topic', 'does-not-exist').status, 0);
   assert.notEqual(select('--card', 'does-not-exist').status, 0);
+  assert.notEqual(select('--pattern', 'does-not-exist').status, 0);
 });
 test('Git worktree exclusion path is resolved through Git rather than .git directory assumptions', t => {
   const repo = checkout(t);
@@ -84,7 +118,7 @@ test('an unmodified managed install accepts a source update without deleting unr
   assert.equal(install(repo).status, 0);
   writeFileSync(join(repo, '.agent-harness/personal-note.md'), 'Keep me');
   const packageCopy = checkout(t);
-  for (const name of ['scripts', 'knowledge', 'skills', 'roles', 'templates', 'WORKFLOW.md', 'docs']) cpSync(join(root, name), join(packageCopy, name), { recursive: true });
+  for (const name of ['scripts', 'knowledge', 'patterns', 'skills', 'roles', 'templates', 'WORKFLOW.md', 'docs']) cpSync(join(root, name), join(packageCopy, name), { recursive: true });
   writeFileSync(join(packageCopy, 'WORKFLOW.md'), 'Updated shared workflow');
   const result = spawnSync(process.execPath, [join(packageCopy, 'scripts/install.mjs'), '--repo', repo, '--client', 'codex'], { encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
@@ -109,7 +143,7 @@ for (const [client, folder] of [['codex', '.agents'], ['claude', '.claude'], ['c
     const repo = checkout(t);
     const result = spawnSync(process.execPath, [join(root, 'scripts/install.mjs'), '--repo', repo, '--client', client], { encoding: 'utf8' });
     assert.equal(result.status, 0, result.stderr);
-    for (const name of ['engineering-manager', 'engineering-knowledge', 'shape-linear-ticket', 'pr-audit', 'project-qa', 'quality-gates']) {
+    for (const name of ['engineering-manager', 'engineering-knowledge', 'engineering-patterns', 'shape-linear-ticket', 'pr-audit', 'project-qa', 'quality-gates']) {
       const skill = join(repo, folder, 'skills', name, 'SKILL.md');
       const content = readFileSync(skill, 'utf8');
       for (const match of content.matchAll(/\]\((\.\.\/[^)]+)\)/g))

@@ -11,9 +11,16 @@ Strict composition resolves only when every input has data. It exposes the first
 Eager composition produces a partial projection from all currently resolved values. It must expose every input failure because partial data and failures can coexist.
 
 ```ts
-export type EagerQuery<Value, Failure = unknown> = {
+export type EagerQuery<
+  Value,
+  Failure = unknown,
+  Source extends PropertyKey = string,
+> = {
   data: Value | undefined
-  errors: Failure[]
+  errors: Array<
+    | { stage: 'query'; source: Source; error: Failure }
+    | { stage: 'join'; error: Error }
+  >
   isPending: boolean
 }
 ```
@@ -59,36 +66,57 @@ export function combineQueriesStrict<Value, Output, Failure>({
     : { data: undefined, error: result.error, isPending, isFetching }
 }
 
-export function combineQueriesEager<Value, Output, Failure>({
+type EagerQueryInput<Source extends PropertyKey, Value, Output, Failure> = {
+  queries: ReadonlyArray<{
+    source: Source
+    query: MinimalQuery<Value, Failure>
+  }>
+  join: (values: ReadonlyArray<{ source: Source; data: Value }>) => Output
+}
+
+export function combineQueriesEager<
+  Source extends PropertyKey,
+  Value,
+  Output,
+  Failure,
+>({
   queries,
   join,
-}: CombineQueriesInput<Value, Output, Failure>): EagerQuery<
+}: EagerQueryInput<Source, Value, Output, Failure>): EagerQuery<
   Output,
-  Failure | Error
+  Failure | Error,
+  Source
 > {
-  const values: Value[] = []
-  const errors: Array<Failure | Error> = []
+  const values: Array<{ source: Source; data: Value }> = []
+  const errors: Array<
+    | { stage: 'query'; source: Source; error: Failure }
+    | { stage: 'join'; error: Error }
+  > = []
 
-  for (const query of queries) {
-    if (query.data !== undefined) values.push(query.data)
-    if (query.error !== null) errors.push(query.error)
+  for (const { source, query } of queries) {
+    if (query.data !== undefined) values.push({ source, data: query.data })
+    if (query.error !== null) {
+      errors.push({ stage: 'query', source, error: query.error })
+    }
   }
 
   if (values.length === 0) {
     return {
       data: undefined,
       errors,
-      isPending: queries.some(query => query.isPending),
+      isPending: queries.some(({ query }) => query.isPending),
     }
   }
 
   const result = attempt(() => join(values))
-  if (!result.ok) errors.push(result.error)
+  if (!result.ok) {
+    errors.push({ stage: 'join', error: result.error })
+  }
 
   return {
     data: result.ok ? result.value : undefined,
     errors,
-    isPending: queries.some(query => query.isPending),
+    isPending: queries.some(({ query }) => query.isPending),
   }
 }
 
@@ -98,7 +126,10 @@ const overview = combineQueriesStrict({
 })
 
 const visiblePrices = combineQueriesEager({
-  queries: priceQueries,
+  queries: [
+    { source: 'current', query: currentPrice },
+    { source: 'benchmark', query: benchmarkPrice },
+  ],
   join: prices => prices,
 })
 ```

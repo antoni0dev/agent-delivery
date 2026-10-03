@@ -54,6 +54,10 @@ export function reduceNavigation<Map extends object>(
   }
 
   if (action.type === 'back') {
+    if (!Number.isFinite(action.steps)) {
+      throw new Error('Expected a finite navigation step count')
+    }
+
     const count = Math.max(0, Math.floor(action.steps))
     const keep = Math.max(1, state.history.length - count)
     return { history: state.history.slice(0, keep) }
@@ -92,6 +96,6 @@ Prefetch after the first useful paint, one module at a time during idle periods,
 
 - Every destination and payload is a compile-time valid pair.
 - Unknown persisted or external destinations are rejected before entering history.
-- Push, replace, reset and back have distinct tests, and back never pops below root.
+- Push, replace, reset and back have distinct tests. Back rejects non-finite counts and never pops below root.
 - Direct entry, refresh, sharing, and browser history requirements were checked before choosing in-memory navigation.
 - Lazy-load failure, later retry, prefetch reuse, and error-boundary behavior are tested.

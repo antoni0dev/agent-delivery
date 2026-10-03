@@ -40,15 +40,20 @@ export function createPersistentStateHook<Key extends string>(
     initialValue,
     codec,
   }: PersistentStateInput<Key, Value>) {
-    const initialValues = useRef(new Map<Key, { value: Value }>())
-    let initialEntry = initialValues.current.get(key)
+    const mountedKey = useRef(key)
+    const initialEntry = useRef<{ value: Value } | null>(null)
 
-    if (initialEntry === undefined) {
-      initialEntry = { value: initialValue() }
-      initialValues.current.set(key, initialEntry)
+    if (mountedKey.current !== key) {
+      throw new Error(
+        'Persistent state keys are immutable for one hook instance; remount for a new key'
+      )
     }
 
-    const initial = initialEntry.value
+    if (initialEntry.current === null) {
+      initialEntry.current = { value: initialValue() }
+    }
+
+    const initial = initialEntry.current.value
     const subscribe = useCallback(
       (listener: () => void) => storage.subscribe(key, listener),
       [key, storage]
@@ -85,9 +90,11 @@ export function createPersistentStateHook<Key extends string>(
 
 Separate `setValue` and `updateValue` so a stored function can never be mistaken for an updater. Stabilize `subscribe` and snapshot functions only when the chosen React version or adapter lifecycle requires stable identities.
 
-Defaults are stored per key so an account or scope change cannot seed a new key
-with the previous key's value. Only `undefined` means absent; `null` remains a
-valid persisted value when the codec permits it.
+The key is immutable for one hook instance. Remount the owning component with
+`key={storageKey}` when account or scope changes; this prevents a previous
+key's default from seeding the next key and keeps render-time initialization
+one-time and predictable. Only `undefined` means absent; `null` remains a valid
+persisted value when the codec permits it.
 
 ## Versioned value
 
@@ -108,4 +115,4 @@ The codec should migrate supported older versions, reject future versions, and a
 - Subscription cleanup removes exactly the listener that was added.
 - Server rendering has a deterministic server snapshot.
 - Tests cover functional updates, validation correction, migration, and multi-subscriber updates.
-- Tests cover a mounted key change and a codec whose valid value includes `null`.
+- Tests cover rejection of a mounted key change, remounting with a new key, and a codec whose valid value includes `null`.

@@ -4,9 +4,13 @@ const root = new URL('../', import.meta.url);
 const { cards } = JSON.parse(readFileSync(new URL('knowledge/cards.json', root), 'utf8'));
 const { topics } = JSON.parse(readFileSync(new URL('knowledge/topics.json', root), 'utf8'));
 const { patterns } = JSON.parse(readFileSync(new URL('patterns/catalog.json', root), 'utf8'));
-const patternTopics = {};
+const patternTopics = new Map();
 for (const pattern of patterns) {
-  for (const topic of pattern.topics) (patternTopics[topic] ??= []).push(pattern.id);
+  for (const topic of pattern.topics) {
+    const ids = patternTopics.get(topic) ?? [];
+    ids.push(pattern.id);
+    patternTopics.set(topic, ids);
+  }
 }
 const args = process.argv.slice(2);
 try {
@@ -16,7 +20,7 @@ try {
     process.stdout.write([
       ...patterns.map(pattern => `${pattern.id}: ${pattern.title} [${pattern.topics.join(', ')}]`),
       '',
-      ...Object.entries(patternTopics).map(([topic, ids]) => `${topic}: ${ids.join(', ')}`),
+      ...[...patternTopics].map(([topic, ids]) => `${topic}: ${ids.join(', ')}`),
     ].join('\n') + '\n');
   } else {
     const selectedCards = new Set();
@@ -29,8 +33,8 @@ try {
         topics[value].forEach(id => selectedCards.add(id));
       } else if (flag === '--card' && cards.some(card => card.id === value)) {
         selectedCards.add(value);
-      } else if (flag === '--pattern-topic' && Object.hasOwn(patternTopics, value)) {
-        patternTopics[value].forEach(id => selectedPatterns.add(id));
+      } else if (flag === '--pattern-topic' && patternTopics.has(value)) {
+        patternTopics.get(value).forEach(id => selectedPatterns.add(id));
       } else if (flag === '--pattern' && patterns.some(pattern => pattern.id === value)) {
         selectedPatterns.add(value);
       } else throw new Error(`Unknown selector: ${flag} ${value ?? ''}. Use --list or --list-patterns.`);

@@ -30,6 +30,22 @@ test('pattern catalog validation rejects selector-breaking field shapes', t => {
   assert.match(result.stderr, /slug topics/);
 });
 
+test('pattern selector accepts topic names inherited by ordinary objects', t => {
+  const directory = mkdtempSync(join(tmpdir(), 'harness-pattern-topic-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  for (const name of ['knowledge', 'patterns', 'scripts', 'WORKFLOW.md', 'templates', 'skills', 'docs'])
+    cpSync(join(root, name), join(directory, name), { recursive: true });
+  const catalogPath = join(directory, 'patterns/catalog.json');
+  const catalog = JSON.parse(readFileSync(catalogPath, 'utf8'));
+  catalog.patterns[0].topics = ['constructor'];
+  writeFileSync(catalogPath, JSON.stringify(catalog, null, 2) + '\n');
+  const check = spawnSync(process.execPath, [join(directory, 'scripts/check.mjs')], { encoding: 'utf8' });
+  assert.equal(check.status, 0, check.stderr);
+  const select = spawnSync(process.execPath, [join(directory, 'scripts/select.mjs'), '--pattern-topic', 'constructor'], { encoding: 'utf8' });
+  assert.equal(select.status, 0, select.stderr);
+  assert.match(select.stdout, /Pattern: exhaustive-branching/);
+});
+
 function checkout(t) {
   const dir = mkdtempSync(join(tmpdir(), 'harness-test-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));

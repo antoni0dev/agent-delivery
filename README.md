@@ -25,10 +25,10 @@ Read [Migration](docs/migration.md) before replacing an existing controller inst
 ## What is shared
 
 - [Workflow](WORKFLOW.md): planning, parallel execution, independent review, QA and delivery.
-- `roles/`: focused responsibilities for initiative owners, workers, reviewers and QA.
-- `skills/`: manager, knowledge-selection, ticket-shaping, independent PR audit, scoped QA and repository-check procedures.
+- `roles/`: focused responsibilities for initiative owners, workers, an investigator, the general reviewer with its contract and money lenses, and QA.
+- `skills/`: manager, knowledge-selection, task verification, ticket-shaping, independent PR audit, review-comment resolution, scoped QA, repository-check and repository-bootstrap procedures.
 - `knowledge/`: the complete existing card library, anti-patterns, examples, coverage inventory and historical audit metadata.
-- `templates/`: repository configuration and resumable initiative notes.
+- `templates/`: repository configuration, risk routing, the review findings schema, resumable initiative notes, master tickets, split PRDs, technical specs, runbooks, release receipts and a catalog of executable checks.
 
 The knowledge files are preserved unchanged in this simplification. That preservation is not a fresh audit of every original source. See [Knowledge](docs/knowledge.md) for what the records establish and their limits. No general redistribution license is granted by this repository.
 

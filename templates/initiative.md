@@ -1,12 +1,31 @@
 # Initiative: <title>
 
 - Master ticket / requested outcome:
+- Tier and flags (tier; money yes/no; ui yes/no) and who set them:
 - Project manager / native session ID:
 - Workstream owner sessions, if useful:
 - Status and last checkpoint:
 - Approved scope, delegation/session creation/messaging authority and approval reference:
-- Architecture decisions / unresolved decisions:
-- Selected card IDs, content references, applicability and exceptions:
+- Selected card IDs, packs, content references, applicability and exceptions:
+
+## Decision record
+
+| Field | Decision |
+|---|---|
+| Outcome | |
+| Source of truth | |
+| Boundary | |
+| State owner | |
+| Chosen pattern | |
+| Strongest rejected alternative | |
+| Observable proof | |
+
+## Open questions
+
+| Question | Owner | Blocks | Answer and source |
+|---|---|---|---|
+
+An open question blocks only the slices it names. Record the answer with its source before resuming them; never fill one with an invented default.
 
 ## Work map
 
@@ -16,7 +35,7 @@
 ## Acceptance
 
 - Required journeys and repository checks:
-- Independent reviewer and reviewed candidate:
+- Independent reviewer, routed lenses and reviewed candidate:
 - QA context, tested candidate/environment and actual outcomes:
 - Current CI / required human reviews:
 - Destination merge authority / confirmed remote result:
@@ -35,5 +54,7 @@
 - Latest concise owner reports:
 - Blocker or decision needed:
 - Next concrete action:
+
+Write every checkpoint for a reader with no chat history: no "as discussed" or "the approach above", repository-relative paths, and errors quoted verbatim.
 
 Keep this note short and current. Do not copy credentials, raw transcripts or another organization's data into it.

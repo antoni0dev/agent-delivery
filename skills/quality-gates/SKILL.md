@@ -29,8 +29,14 @@ These paths target an installed skill; in the source package use root `WORKFLOW.
 
 ## Execute and diagnose
 
-- Record the command, working directory, candidate head and environment relevant to
-  its result. Run with bounded native process tools; preserve actual exit status.
+- Start from a clean tree at a known head; do not record results for a dirty tree.
+  Record each command, working directory, full head SHA, exit status and relevant
+  environment as a gate record bound to that head. Run with bounded native process
+  tools; preserve actual exit status.
+- If an autofix or formatter changes files during the run, that record fails and
+  lists the files. The owner reviews and commits the change, then reruns the full
+  gate on the new head. See "Gate record at exact HEAD" in
+  `.agent-harness/templates/checks/README.md`.
 - Read failure output and retained artifacts. Reproduce the exact failure before
   changing code. Return out-of-scope or infrastructure failures with concrete evidence.
 - Never weaken an assertion, disable a required check, fabricate fixtures or treat
@@ -45,6 +51,7 @@ These paths target an installed skill; in the source package use root `WORKFLOW.
 
 - Report pass, fail, skipped or unverified for each required check with the actual
   candidate identity and result reference. Distinguish local checks from remote CI.
+  Accept a gate record only when its SHA equals the current head.
 - Verify CI belongs to the candidate and the actual tested ref; a PR head and
   integration/merge ref are not interchangeable. Respect required repository policy.
 - Hand stable source and evidence to independent audit and applicable QA. Passing

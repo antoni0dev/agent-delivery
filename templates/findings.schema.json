@@ -1,0 +1,159 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Review findings",
+  "description": "One document per independent review context and pinned head. Consumers recompute the effective verdict and never trust a stored verdict or count: an invalid document, a stored blocked verdict or a contract row with a null field is blocked; otherwise any main-path or money finding, or a stored revise, is revise; otherwise approve.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["verdict", "lenses", "reviewed", "summary", "findings", "uncovered"],
+  "properties": {
+    "verdict": {
+      "enum": ["approve", "revise", "blocked"],
+      "description": "approve: no main-path or money finding. revise: at least one. blocked: the context could not judge; the summary names the missing evidence."
+    },
+    "lenses": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/lens" },
+      "description": "Lenses applied in this context, from the project's risk routing. Each finding's lens is one of these."
+    },
+    "reviewed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["head", "base"],
+      "properties": {
+        "repository": { "type": "string", "minLength": 1, "description": "Resolved repository identity, such as host/owner/name." },
+        "pullRequest": { "type": "string", "minLength": 1, "description": "Pull request number or URL, when one exists." },
+        "head": { "$ref": "#/$defs/sha", "description": "Pinned head commit the review read." },
+        "base": { "$ref": "#/$defs/sha", "description": "Pinned base commit the diff was taken against." }
+      }
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Two or three sentences on the judgment. For blocked, the exact missing evidence."
+    },
+    "findings": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/finding" }
+    },
+    "hygiene": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifacts", "comments", "testValue", "slop"],
+      "description": "Required from the general lens. Each category is pass or the ids of its findings; silence is not a pass.",
+      "properties": {
+        "artifacts": { "$ref": "#/$defs/hygieneResult" },
+        "comments": { "$ref": "#/$defs/hygieneResult" },
+        "testValue": { "$ref": "#/$defs/hygieneResult" },
+        "slop": { "$ref": "#/$defs/hygieneResult" }
+      }
+    },
+    "contracts": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/contractRow" },
+      "description": "Required from the contract lens: one row per changed REST, stream, ABI or indexer boundary."
+    },
+    "uncovered": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Areas, journeys or files not reviewed, each with its reason. An empty list claims full coverage of the routed scope."
+    }
+  },
+  "allOf": [
+    {
+      "if": { "required": ["lenses"], "properties": { "lenses": { "type": "array", "contains": { "const": "general" } } } },
+      "then": { "required": ["hygiene"] }
+    },
+    {
+      "if": { "required": ["lenses"], "properties": { "lenses": { "type": "array", "contains": { "const": "contract" } } } },
+      "then": { "required": ["contracts"] }
+    }
+  ],
+  "$defs": {
+    "sha": {
+      "type": "string",
+      "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$"
+    },
+    "lens": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "description": "general, contract, money or a project lens that has its own read-only role file."
+    },
+    "hygieneResult": {
+      "oneOf": [
+        { "const": "pass" },
+        {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      ]
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "lens", "impact", "file", "line", "trigger", "mechanism", "evidence", "repair"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*-[0-9]+$",
+          "description": "Stable within the audit, such as money-1. Replies and repair reviews cite it."
+        },
+        "lens": { "$ref": "#/$defs/lens" },
+        "impact": {
+          "enum": ["main-path", "money", "deferred"],
+          "description": "main-path: breaks a primary journey or its loading, empty or error state. money: duplicate or wrong submission, wrong amount, price, fee or balance, or stuck or lost funds. deferred: anything else; never blocks."
+        },
+        "file": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Repository-relative path, or the reviewed input name such as plan.md."
+        },
+        "line": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "description": "First relevant line at the pinned head; null only for a missing file or a whole-file finding."
+        },
+        "trigger": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Ordered user actions or inputs on the normal journey that produce the defect. For a deferred finding, the sequence that would be needed."
+        },
+        "mechanism": {
+          "type": "string",
+          "minLength": 1,
+          "description": "How the code fails, in one or two sentences."
+        },
+        "evidence": {
+          "type": "string",
+          "minLength": 1,
+          "description": "file:line citations, command output or quoted contract text proving the mechanism."
+        },
+        "repair": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Smallest safe repair direction. The implementation owner decides the change."
+        }
+      }
+    },
+    "contractRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["boundary", "serialization", "cardinality", "errors", "test"],
+      "description": "A null field marks an unresolved contract fact and makes the document blocked.",
+      "properties": {
+        "boundary": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Operation, channel, function, event or entity; its authoritative artifact; the exact caller."
+        },
+        "serialization": { "type": ["string", "null"], "minLength": 1 },
+        "cardinality": { "type": ["string", "null"], "minLength": 1 },
+        "errors": { "type": ["string", "null"], "minLength": 1 },
+        "test": { "type": ["string", "null"], "minLength": 1 }
+      }
+    }
+  }
+}

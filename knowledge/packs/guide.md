@@ -1358,11 +1358,11 @@ Pack: `execution` (candidate). Topics: `backend`, `distributed`, `mutations`, `e
 
 ## Never fail the whole request after a side effect
 
-Once the first effect of a request is published, such as an order sent or a leg executed, the handler only returns success: later failures become per-target outcomes in a 202 response, so the stored idempotent answer is terminal and replaying the key can never re-run executed legs. Every requested target gets an explicit outcome, including targets with nothing to do. Long fan-outs stop starting new work at an internal deadline below the request timeout and report the rest as retryable.
+Once any target may have published an effect, persist and return one outcome per requested target: not-started with proof, submitted or confirmed, definitely rejected, or unknown. The batch response itself is durable and replayable, so replaying its key never re-runs a target. A fresh-key follow-up is allowed only for a target proved not dispatched and under an approved retry policy. Unknown targets keep their original operation identity and reconcile authoritatively. Long fan-outs stop starting work at an internal deadline and mark the remainder not-started, not generically failed.
 
 **Apply when:** a handler fans out across wallets, positions, chains or legs, or performs more than one side effect under one idempotency claim.
 
-**Checks:** no error return or early exit after the first publish; the response carries requested and submitted counts and one outcome per target; failed outcomes state whether they are retryable; the stop deadline leaves margin under the request timeout and the claim TTL; retrying a failed leg is documented as a new request with a fresh key, while replaying the old key returns the original outcome; a request that fails before any effect may still error and release its claim.
+**Checks:** no error return or early exit after first publish; the response has exactly one typed outcome per target; unknown is distinct from rejected and not-started; only proved not-started work may receive a fresh operation under approved policy; unknown retains its identity and reconciliation handle; replay returns the identical batch response; internal deadline leaves untouched targets explicitly not-started.
 
 **Anti-pattern:** Return 500 when the third of five legs fails after two have executed.
 
@@ -1377,12 +1377,12 @@ for (const leg of legs) await execute(leg) // throws on leg 3, request errors, k
 **Better example (illustrative):**
 
 ```text
-for (const leg of legs) outcomes.push(await tryExecute(leg)); return { status: 202, outcomes }
+outcomes[target] = await executeOrClassify(target, stableId); persistBatch(outcomes); return { status: 202, outcomes }
 ```
 
 **Legitimate exceptions:** A single-effect endpoint may return an error when its one effect definitely did not happen. Validation failures before any effect error normally.
 
-**Verification scenario:** Fail the third leg of a five-leg request: 202 with two submitted and three failed outcomes. Replay the key: identical body and no new execution. Slow the legs past the internal deadline: the remainder is reported retryable before the request timeout.
+**Verification scenario:** Lose one committed response, definitely reject another and cross the internal deadline before two targets start; verify submitted or unknown, rejected and not-started remain distinct, batch replay sends nothing, and only the proved not-started target can begin under a fresh approved operation.
 
 Pack: `execution` (candidate). Topics: `backend`, `contracts`, `errors`, `execution`, `implementation`.
 
@@ -1556,13 +1556,13 @@ Pack: `execution` (candidate). Topics: `backend`, `chain`, `money`, `execution`,
 
 ## Allocate nonces atomically and require two reads for death
 
-Senders sharing a wallet keep per-wallet nonce state (next plus a sorted free list) updated by compare-and-set, reuse released nonces lowest first because a gap stalls every later transaction, and reseed from the chain's pending count when the state is absent. A stale read never lowers the next nonce: use the larger of the chain read and the last proven landing. Declare a broadcast dead only when two snapshots a fixed gap apart both show no receipt and a mined count past its nonce. Refines core card transactions-lost-updates-and-cas.
+Senders sharing a wallet keep per-wallet nonce state (next plus a sorted free list) updated by compare-and-set, reuse released nonces lowest first because a gap stalls every later transaction, and reseed from the chain's pending count when the state is absent. A stale read never lowers the next nonce: use the larger of the chain read and the last proven landing. Declare a broadcast displaced only after authoritative evidence shows a different transaction consumed the nonce in a canonical block that reached the chain-specific safe or finalized policy, while the original hash has no canonical receipt. Two separated reads help detect lag but are never finality proof. Refines core card transactions-lost-updates-and-cas.
 
 **Apply when:** several replicas or routes sign from one wallet, or a resume must decide whether a journaled transaction was displaced.
 
 **Boundary notes:** Classify each send rejection by what it proves, and verify exact error strings for your node and client: too low means consumed, so resync forward without freeing; already known or underpriced means occupied, so discard the new send without freeing the nonce and keep waiting for the original's receipt, never marking it failed; a rejection proving the transaction never entered frees the nonce. A single writer can serialize build, send and confirm under one lock instead.
 
-**Checks:** no client library caches a nonce advanced by a fill whose send never happened; an account nonce is consumed even by a mined revert, while an in-contract replay nonce is not; the dead verdict runs only after a bounded receipt re-poll; RPC behind a load balancer is assumed to lag.
+**Checks:** no client library caches a nonce advanced by a fill whose send never happened; account nonce consumption is bound to canonical block hash and finality tier; known competing hashes are tracked; the verdict survives a reorg test; the original receipt is re-polled after finality; RPC behind a load balancer is assumed to lag.
 
 **Anti-pattern:** Read the nonce once, increment locally per send, and treat one no-receipt, nonce-passed read as proof the transaction was dropped.
 
@@ -1577,12 +1577,12 @@ if (!(await receipt(h)) && (await minedCount(addr)) > n) resubmit()
 **Better example (illustrative):**
 
 ```text
-const dead = (await snapshot()) && (await sleep(gap), await snapshot()); dead ? markDisplaced() : keepWaiting()
+proof = await finalizedNonceConsumer(address, nonce); proof.otherHash && !canonicalReceipt(original) ? markDisplaced(proof) : keepUnknown()
 ```
 
 **Legitimate exceptions:** User-signed wallet transactions use the wallet's own nonce management; blockhash-expiry chains use expiry instead.
 
-**Verification scenario:** Run two replicas allocating for one wallet: no duplicate nonces and no lasting gaps. Serve a lagging replica on one of the two reads: no dead verdict.
+**Verification scenario:** Run two allocators with no duplicate nonces; serve lagging reads and a pre-finality competing transaction that is later reorganized out: no displaced verdict. Finalize a competing hash at the nonce: one displaced verdict bound to its canonical block.
 
 Pack: `execution` (candidate). Topics: `backend`, `chain`, `distributed`, `execution`, `implementation`.
 
@@ -1908,7 +1908,7 @@ Pack: `money` (candidate). Topics: `types`, `boundaries`, `frontend`, `backend`,
 
 ## Bind each quote to its route, amount and expiry
 
-A quote is usable only for the exact route and input amount it priced, and only before it expires; model it as a status union (disabled, fetching, valid, invalid, failed, superseded) resolved at render and again at submit. An expired or amount-mismatched quote is superseded and refetches, and one whose economic fields fail validation is invalid. Transport errors, 5xx, 408 and 429 stay fetching and retry the read, while a definite 4xx refusal is failed with its message. Refines core card queries-explicit-async-states.
+A quote is usable only for the exact route and input amount it priced, and only before it expires; model it as a status union (disabled, fetching, valid, invalid, failed, superseded) resolved at render and again at submit. An expired or amount-mismatched quote is superseded and refetches, and one whose economic fields fail validation is invalid. Transport errors, 5xx, 408 and 429 stay fetching and retry the read. A definite 4xx refusal is failed by stable error code; display its server message only when the error envelope marks `sanitized` exactly true, otherwise use approved fallback copy. Refines core card queries-explicit-async-states.
 
 **Apply when:** a form shows a receive amount, rate or fee from a quote endpoint, or a submit handler builds an order from a quote.
 
@@ -1934,7 +1934,7 @@ const status = resolveQuoteStatus({ quote, route, amount, error }); submit only 
 
 **Legitimate exceptions:** An indicative price with no executable terms needs no binding. When the server re-prices and enforces min-out atomically, the client binds the display but need not duplicate checks beyond the contract.
 
-**Verification scenario:** Change the amount after a quote, let one expire, and return zero output, a 503 and a 422; verify superseded with refetch, invalid, fetching with retry, and failed with the server message, and that submit is blocked outside valid.
+**Verification scenario:** Change amount, expire a quote, return zero output, 503, sanitized 422 and unsanitized 422; verify superseded with refetch, invalid, fetching with retry, curated message only for sanitized refusal, fallback for unsanitized refusal, and submit blocked outside valid.
 
 Pack: `money` (candidate). Topics: `quotes`, `money`, `query`, `frontend`, `implementation`.
 
@@ -2044,13 +2044,13 @@ Pack: `money` (candidate). Topics: `authorization`, `quotes`, `frontend`, `backe
 
 ## Admit third-party swap calldata through one ordered guard
 
-Aggregator calldata is untrusted until one admission function, the only path to an executable plan, accepts it after fixed-order checks where the first failure wins. It bounds blast radius (what is called and approved, how much native value moves, how far the provider's numbers may go), not price; a ceiling against an in-house quote catches unit bugs. A swap paying anyone but the trader stays in-house: no guard can prove who third-party calldata pays. Refines core card types-boundary-validation. The floor checks cover the floor the provider reports; enforcing the floor that actually executes needs calldata decoding or an on-chain check of the amount received, otherwise record the remaining price risk.
+Aggregator calldata is untrusted until one admission function, the only path to an executable plan, accepts it after fixed-order checks where the first failure wins. It bounds blast radius (what is called and approved, how much native value moves, how far the provider's numbers may go), not price; a ceiling against an in-house quote catches unit bugs. The guard decodes the supported calldata shape and proves the actual recipient is the intended account and the executed minimum output is at least the user-confirmed floor. If recipient or floor cannot be decoded and enforced before signing, the plan is non-executable and stays in shadow or in-house. Provider metadata alone never proves what its calldata executes. Refines core card types-boundary-validation.
 
 **Apply when:** integrating an aggregator or solver that returns calldata, a spender or a min-out, or adding a provider or chain.
 
 **Boundary notes:** calldata your own router builds needs input validation, not this guard. Run new providers in shadow (priced, metered, never executed) until refusals read zero.
 
-**Checks:** in order: slippage at most 10,000 bps; target allowlisted; no spender for native-in, a vouched one for token-in; any extra call a zero-value approve of a route token to an accepted spender; native value exactly the swap's native spend (zero for token-in); chain echo matches; output decimals known; output non-zero; floor not above quote; no overflow; echoed floor at least quote less requested slippage. Refusals feed an alerting must-be-zero counter.
+**Checks:** in order: supported selector and calldata decoder; decoded recipient equals the intended account; decoded minimum output meets the confirmed floor; slippage at most 10,000 bps; target allowlisted; no spender for native-in, a vouched one for token-in; any extra call a zero-value approve of a route token to an accepted spender; native value exactly the swap's native spend (zero for token-in); chain echo matches; output decimals known; output non-zero; floor not above quote; no overflow; echoed floor at least quote less requested slippage. Refusals feed an alerting must-be-zero counter.
 
 **Anti-pattern:** Execute the best-quoting provider's calldata, trusting its own spender, value and min-out fields.
 
@@ -2065,12 +2065,12 @@ if (ext.quotedOut > own.quotedOut) send({ to: ext.to, data: ext.data, value: ext
 **Better example (illustrative):**
 
 ```text
-plan = guard.check(ext, request, allowlist) // or a named refusal; refuse quotedOut > ceiling * ownQuote; preflight(plan)
+decoded = decodeSupportedCall(ext.data); requireRecipientAndFloor(decoded, intent); plan = guard.check(decoded, ext, allowlist); preflight(plan)
 ```
 
 **Legitimate exceptions:** An unpinnable router that redeploys, an upgradeable-proxy allowlist or unlimited approvals each need an explicit owner decision.
 
-**Verification scenario:** Feed one plan per failure (unlisted target, spender on native-in, extra value, wrong chain, unknown decimals, zero output, inverted or loose floor, quote far above in-house); verify each named refusal and that none reaches signing.
+**Verification scenario:** Feed unsupported selector, undecodable calldata, wrong recipient, loose decoded floor, mismatched provider floor, unlisted target, wrong spender or value, wrong chain and absurd quote; verify every plan is refused before signing.
 
 Pack: `money` (candidate). Topics: `execution`, `security`, `contracts`, `backend`, `review`.
 
@@ -2920,13 +2920,13 @@ Pack: `perps` (candidate). Topics: `backend`, `money`, `execution`, `implementat
 
 ## Keep risk-reducing actions available under degraded reads
 
-Define freshness requirements per action. Opening or increasing exposure may require fresh balances, positions and risk parameters. Cancelling an order, closing or reducing a position and lowering leverage should remain reachable through the authoritative mutation contract when live reads degrade, unless a recorded money policy proves stale state makes that action unsafe. Stream health informs the decision and messaging; it is not blanket authorization.
+Define freshness requirements per action. Opening or increasing exposure may require fresh balances, positions and risk parameters. Classify cancellation by the order's economic intent: cancelling an exposure-increasing entry may reduce risk, while cancelling a protective reduce-only stop or take-profit can increase it. Closing, reducing and lowering leverage should remain reachable through the authoritative mutation contract when live reads degrade unless a recorded money policy proves stale state makes that specific action unsafe. Stream health informs the decision and messaging; it is not blanket authorization.
 
 **Apply when:** gating controls on socket state, reconnect, auth refresh, stale queries or degraded backend health.
 
 **Boundary notes:** Exact allowed actions and copy are product and risk decisions. The default safety question is whether blocking traps the user in exposure.
 
-**Checks:** every action has a freshness policy; risk-increasing and risk-reducing actions are distinct; cancel and reduce-only paths do not depend on unrelated feeds; the server rechecks current state; degraded UI explains uncertainty without fabricating balances; recovery never replays a mutation.
+**Checks:** every action has a freshness policy; cancellation is classified from the target order's side, reduce-only flag and protective role; risk-increasing and risk-reducing actions are distinct; approved close and reduce-only paths do not depend on unrelated feeds; the server rechecks current state; degraded UI explains uncertainty without fabricating balances; recovery never replays a mutation.
 
 **Anti-pattern:** Disable the whole trading surface whenever any socket reconnects.
 
@@ -2941,12 +2941,12 @@ disabled = socket.status !== 'connected' for open, cancel and close
 **Better example (illustrative):**
 
 ```text
-disabledReason = actionFreshnessPolicy[action].evaluate(authoritativeHealth)
+policy = actionFreshnessPolicy.classify(action, targetOrderIntent); disabledReason = policy.evaluate(authoritativeHealth)
 ```
 
 **Legitimate exceptions:** If the mutation itself depends on stale client-computed data, block it until the contract is redesigned or freshness is restored.
 
-**Verification scenario:** Degrade trades, orders, balances and risk-parameter streams separately; verify sourced policy for new exposure and continued cancel or reduction where the authoritative mutation remains safe.
+**Verification scenario:** Degrade each stream, then cancel an opening order, cancel a protective reduce-only stop, close and reduce; verify intent-specific sourced policy rather than treating every cancel as risk reduction.
 
 Pack: `perps` (candidate). Topics: `frontend`, `money`, `realtime`, `planning`, `perps`.
 
@@ -3806,7 +3806,7 @@ Keep Next.js pages and layouts as server components by default. Read promised pa
 
 **Anti-pattern:** Make every page client-only to avoid one dynamic server read, or keep an entire interactive workspace server-owned.
 
-**Why it fails:** Every navigation waits on a dynamic server round trip, and switching entities of one route flashes loading for data the browser already holds.
+**Why it fails:** Whole-page clientization discards server authorization, metadata and streaming, while an oversized dynamic server page can add unnecessary round trips and loading for data the browser already holds. Either extreme ignores route responsibilities.
 
 **Bad example (illustrative):**
 
@@ -3822,7 +3822,7 @@ Server Page resolves params, authorization and metadata, then renders <TradingWo
 
 **Legitimate exceptions:** A route needing per-request server-only work in the page body, with no client equivalent, can stay server-rendered; record why.
 
-**Verification scenario:** Navigate between two entities of one route and assert no dynamic route-payload request and no loading surface for cached data; on a hard load with hydration held, assert critical content is in the streamed HTML.
+**Verification scenario:** Navigate between two entities and allow the framework's expected dynamic route payload; assert there is no additional client waterfall or unnecessary loading for cached data, route-local authorization and metadata stay server-owned, and a hard load streams approved critical content.
 
 **Automatable check:** A boundary check rejects server-only imports from client modules and flags whole-page clientization for explicit review.
 

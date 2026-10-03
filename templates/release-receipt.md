@@ -4,6 +4,7 @@ Bind each item to the immutable ref it actually proves. Mark a field that does n
 
 - Release authority and approver:
 - Reviewed PR head SHA (full):
+- Reviewed base SHA (full):
 - Merge commit SHA (full, or not applicable with reason):
 - Required CI run and the exact ref or SHA it tested:
 - Preview URL and the exact ref or SHA it serves:

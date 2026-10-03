@@ -1,25 +1,52 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 
 const root = new URL('../', import.meta.url);
-const { cards } = JSON.parse(readFileSync(new URL('knowledge/cards.json', root), 'utf8'));
-const { topics } = JSON.parse(readFileSync(new URL('knowledge/topics.json', root), 'utf8'));
+const read = name => JSON.parse(readFileSync(new URL(name, root), 'utf8'));
+const titleOf = card => card.content.split('\n')[0].replace(/^## /, '');
 const args = process.argv.slice(2);
 try {
+  const cards = read('knowledge/cards.json').cards.map(card => ({ ...card, source: 'core', header: card.id }));
+  const ids = new Set(cards.map(card => card.id));
+  const topics = new Map(Object.entries(read('knowledge/topics.json').topics).map(([topic, members]) => [topic, [...members]]));
+  const packs = new Map();
+  const packDirectory = new URL('knowledge/packs/', root);
+  for (const file of existsSync(packDirectory) ? readdirSync(packDirectory).filter(name => name.endsWith('.json')).sort() : []) {
+    try {
+      const { pack, status, cards: packCards } = read(`knowledge/packs/${file}`);
+      packs.set(pack, packCards.map(card => card.id));
+      for (const card of packCards) {
+        if (ids.has(card.id)) throw new Error(`duplicate card id ${card.id}`);
+        ids.add(card.id);
+        cards.push({ ...card, source: `pack:${pack} (${status})`, header: `${card.id} (pack ${pack}, ${status})` });
+        for (const topic of card.topics) {
+          if (!topics.has(topic)) topics.set(topic, []);
+          topics.get(topic).push(card.id);
+        }
+      }
+    } catch (error) {
+      throw new Error(`Invalid knowledge pack knowledge/packs/${file}: ${error.message}`);
+    }
+  }
+  const selectors = {
+    '--topic': value => topics.get(value),
+    '--pack': value => packs.get(value),
+    '--card': value => (ids.has(value) ? [value] : undefined),
+  };
   if (args.length === 1 && args[0] === '--list') {
-    process.stdout.write(Object.entries(topics).map(([topic, ids]) => `${topic}: ${ids.join(', ')}`).join('\n') + '\n');
+    process.stdout.write([...topics.keys()].sort().map(topic => `${topic}: ${topics.get(topic).join(', ')}`).join('\n') + '\n');
+  } else if (args.length === 1 && args[0] === '--index') {
+    process.stdout.write(cards.map(card => `${card.id} | ${titleOf(card)} | ${card.source} | ${card.topics.join(', ')}`).join('\n') + '\n');
   } else {
     const selected = new Set();
-    if (!args.length) throw new Error('Use --list, --topic TOPIC or --card ID (repeatable).');
+    if (!args.length) throw new Error('Use --list, --index, --topic TOPIC, --pack NAME or --card ID (selectors are repeatable).');
     for (let i = 0; i < args.length; i += 2) {
       const flag = args[i];
       const value = args[i + 1];
-      if (flag === '--topic' && Object.hasOwn(topics, value)) {
-        topics[value].forEach(id => selected.add(id));
-      } else if (flag === '--card' && cards.some(card => card.id === value)) {
-        selected.add(value);
-      } else throw new Error(`Unknown selector: ${flag} ${value ?? ''}. Use --list.`);
+      const matches = Object.hasOwn(selectors, flag) ? selectors[flag](value) : undefined;
+      if (!matches) throw new Error(`Unknown selector: ${flag} ${value ?? ''}. Use --list or --index.`);
+      matches.forEach(id => selected.add(id));
     }
-    process.stdout.write(cards.filter(card => selected.has(card.id)).map(card => `<!-- Card: ${card.id} -->\n${card.content}`).join('\n\n') + '\n');
+    process.stdout.write(cards.filter(card => selected.has(card.id)).map(card => `<!-- Card: ${card.header} -->\n${card.content}`).join('\n\n') + '\n');
   }
 } catch (error) {
   process.stderr.write(`${error.message}\n`);

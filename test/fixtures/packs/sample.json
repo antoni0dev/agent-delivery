@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "pack": "sample",
+  "title": "Sample fixture pack",
+  "status": "candidate",
+  "summary": "Test fixture for pack selection, installation and validation. It is not shipped guidance.",
+  "cards": [
+    {
+      "id": "sample-release-notes-owner",
+      "topics": [
+        "release",
+        "backend",
+        "review"
+      ],
+      "content": "## Give each release note one owner\n\nAssign one owner to write and verify each user-facing release note before the release is tagged. The owner checks the note against the merged change, not the ticket title, and removes notes for changes that were reverted before the release.\n\n**Apply when:** a release bundles changes from several contributors and the notes are assembled at the end.\n\n**Checks:** every note names a merged change, reverted changes have no note, and the owner is recorded beside the release.\n\n**Anti-pattern:** Copy ticket titles into the notes after tagging and let nobody verify them.\n\n**Why it fails:** Ticket titles describe intent, so the notes can announce behavior that was reduced, renamed or reverted before release.\n\n**Bad example (illustrative):** Notes generated from ticket titles announce \"Add bulk export\" although the export change was reverted.\n\n**Better example (illustrative):** The owner compares each note with the merged diff and drops the reverted export entry before tagging.\n\n**Legitimate exceptions:** An internal build with no user-facing notes needs no owner. A generated changelog is fine when a person still verifies the user-facing summary.\n\n**Verification scenario:** Revert one change after the notes are drafted and confirm the published notes no longer mention it."
+    },
+    {
+      "id": "sample-feature-flag-cleanup",
+      "topics": [
+        "state",
+        "frontend",
+        "implementation"
+      ],
+      "content": "## Remove a feature flag with its last reader\n\nDelete a feature flag in the same change that removes its last reader, and keep the default path that shipped. A flag without readers is dead configuration; a reader without a flag silently falls back to an unreviewed default.\n\n**Apply when:** a rollout has finished and the flag value is the same for every user.\n\n**Boundary notes:** a kill switch for an operational dependency is long-lived on purpose and is not cleanup debt.\n\n**Checks:** search every reader of the flag key, remove the losing branch, then delete the flag definition and its tests together.\n\n**Anti-pattern:** Delete the flag definition first and leave readers to fall back to their default value.\n\n**Why it fails:** Each reader may default differently, so users can see the old branch again without anyone reviewing that change.\n\n**Bad example (illustrative):** Remove the flag from the config service while components still call isEnabled(\"new-checkout\") and default to false.\n\n**Better example (illustrative):** Remove the isEnabled(\"new-checkout\") branches, keep the new checkout path, then delete the flag definition in the same change.\n\n**Legitimate exceptions:** A staged removal across independently deployed services may keep the definition until every service ships, provided the remaining readers default to the shipped behavior.\n\n**Verification scenario:** After removal, search the repository for the flag key and load the affected screen with the flag service unavailable; the shipped path renders.\n\n**Automatable check:** Fail the build when a flag key in code has no definition or a definition has no reader."
+    }
+  ]
+}

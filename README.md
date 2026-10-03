@@ -1,8 +1,8 @@
 # Agent delivery: portable engineering harness
 
-Use one AI client to lead parallel engineering work. This repository supplies shared manager instructions, specialist roles, skills and 58 engineering reference cards. Your chosen client supplies the agents and tools.
+Use one AI client to lead parallel engineering work. This repository supplies shared manager instructions, specialist roles, skills, 58 core engineering reference cards and domain knowledge packs. Your chosen client supplies the agents and tools.
 
-The v0.2 harness has no custom controller, SQL database, runtime adapter, proof cache or background daemon. It does not require using several AI clients together. The earlier controller is historical software, not a prerequisite for this workflow.
+Since v0.2 the harness has no custom controller, SQL database, runtime adapter, proof cache or background daemon. It does not require using several AI clients together. The earlier controller is historical software, not a prerequisite for this workflow.
 
 The core is Markdown and JSON. It imposes no operating system, language, framework, package manager or application runtime version. Each repository keeps its own toolchain. Node-based helper scripts are optional; [manual setup](docs/adapting-a-repository.md#manual-setup-without-node) works without them.
 
@@ -26,10 +26,10 @@ Read [Migration](docs/migration.md) before replacing an existing controller inst
 
 - [Workflow](WORKFLOW.md): planning, parallel execution, independent review, QA and delivery.
 - `roles/`: focused responsibilities for initiative owners, workers, reviewers and QA.
-- `skills/`: manager, knowledge-selection, ticket-shaping, independent PR audit, scoped QA and repository-check procedures.
-- `knowledge/`: the complete existing card library, anti-patterns, examples, coverage inventory and historical audit metadata.
+- `skills/`: thin client entrypoints for shared procedures; installation adds every skill under `skills/` for the chosen client.
+- `knowledge/`: the complete 58-card core library, anti-patterns, examples, coverage inventory and historical audit metadata, plus domain knowledge packs in `knowledge/packs/` that agents select like core cards.
 - `templates/`: repository configuration and resumable initiative notes.
 
-The knowledge files are preserved unchanged in this simplification. That preservation is not a fresh audit of every original source. See [Knowledge](docs/knowledge.md) for what the records establish and their limits. No general redistribution license is granted by this repository.
+The core knowledge release is preserved unchanged in this simplification. That preservation is not a fresh audit of every original source, and candidate packs are not covered by the historical audit. See [Knowledge](docs/knowledge.md) for what the records establish and their limits. No general redistribution license is granted by this repository.
 
 This is an experimental harness. Native delegation, model controls, browser access and scheduled follow-ups depend on the chosen client and destination. Installation does not prove successful delivery or promise unattended work across days.

@@ -119,8 +119,8 @@ Rules for every check:
 
 - **Purpose:** an agent cannot merge, or push to the protected branch, without the recorded gates and the authority PROJECT.md grants.
 - **Signal:** shell commands an agent is about to run: host CLI merges, merge API calls and pushes whose refspec targets the protected branch, including forms wrapped in shell runners, `eval`, environment prefixes and command substitutions.
-- **Sketch:** the agent client's pre-command hook strips heredoc bodies (data, not commands), tokenizes, splits on shell operators and recurses into `-c` and `eval` strings. A protected-branch push is blocked unless a human set an explicit override; a merge requires a passing gate record for the PR head; text that looks like a merge but cannot be parsed is blocked.
-- **Tests:** a push to the protected branch by refspec, forced or not, is blocked; a merge wrapped in a login shell is blocked without a gate record; a heredoc quoting a merge command is allowed; an unparseable merge-like command is blocked; a feature-branch push is allowed.
+- **Sketch:** the agent client's pre-command hook strips heredoc bodies (data, not commands), tokenizes, splits on shell operators and recurses into `-c` and `eval` strings. A protected-branch push is blocked unless a human set an explicit override. A merge requires a passing head-bound gate record, current required CI and reviews, ticket flags matching risk routing, PROJECT.md merge authority, and confirmation that deployment coupling has its separate authority. Money-flagged work stays blocked until the configured human-merge policy is satisfied. Text that looks like a merge but cannot be parsed is blocked.
+- **Tests:** a push to the protected branch by refspec, forced or not, is blocked; a merge wrapped in a login shell is blocked without a gate record, authority record or required review; a money merge without the configured human review is blocked; missing ticket flags and deployment authority fail closed; a heredoc quoting a merge command is allowed; an unparseable merge-like command is blocked; a feature-branch push is allowed.
 - **Ratchet:** none; deny by default.
 
 ### Secret and key-material scan

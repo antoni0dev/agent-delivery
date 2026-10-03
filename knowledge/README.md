@@ -24,7 +24,7 @@ Work in the harness repository:
 
 1. Create `knowledge/packs/<pack>.json` with exactly `schemaVersion` (1), `pack` (the kebab-case file name), `title`, `status` (`candidate`), `summary` and a non-empty `cards` array. Each card has exactly `id`, `topics` and `content`.
 2. Name each card `<pack>-<slug>` in kebab case, at most 60 characters and unique across core and pack cards.
-3. Give each card 2-5 topics from `topics.json` or `money`, `quotes`, `chain`, `signing`, `execution`, `contracts`, `release`, `security`, `web-app`, `frontend` and `backend`. Include `frontend` or `backend`, and `planning`, `implementation` or `review`.
+3. Give each card 2-5 topics from `topics.json` or `money`, `quotes`, `chain`, `signing`, `execution`, `contracts`, `release`, `security`, `web-app`, `perps`, `frontend` and `backend`. Include `frontend` or `backend`, and `planning`, `implementation` or `review`.
 4. Write 800-3200 characters of content: a `## ` title, a rule paragraph, then these bold labels in order, each starting its own paragraph: `**Apply when:**`, optional `**Boundary notes:**`, `**Checks:**`, `**Anti-pattern:**`, `**Why it fails:**`, `**Bad example (illustrative):**` and `**Better example (illustrative):**` (one line each), `**Legitimate exceptions:**`, `**Verification scenario:**` and optional `**Automatable check:**`.
 5. Reference related guidance by ID, as in `Refines core card <id>.` or `pack card <id>`; the check rejects references to unknown cards.
 6. Run `node scripts/render-knowledge-guide.mjs`, then `npm run check`.

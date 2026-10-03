@@ -9,8 +9,10 @@ Read [the workflow](../../../.agent-harness/WORKFLOW.md) and
 [project configuration](../../../.agent-harness/PROJECT.md).
 These paths target an installed skill; in the source package use root `WORKFLOW.md`,
 `templates/` and `knowledge/`. Templates and the checks catalog named below are under
-`.agent-harness/templates/` when installed. Select the `operations` and `contracts`
-packs, and `chain`, `money` and `execution` for the chain additions.
+`.agent-harness/templates/` when installed. Start from `select.mjs --index`, then
+select only the exact cards named by the applicable bootstrap item. Do not load whole
+packs into one task packet. Chain additions draw narrowly from `chain`, `money`,
+`execution` and `perps` where that product domain exists.
 
 Bootstrapping changes CI and hosted settings. Draft each setting as a reviewed file in
 a pull request; apply hosted rulesets, environments and secrets only with explicit

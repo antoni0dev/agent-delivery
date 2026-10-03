@@ -44,7 +44,7 @@ A candidate pack is a usable decision aid that the historical 58-card audit does
   - [Claim idempotency keys atomically and fail closed](#execution-atomic-idempotency-claim-fail-closed)
   - [Never fail the whole request after a side effect](#execution-no-whole-request-error-after-effect)
   - [Make outcome-unknown a terminal state with a timeout ladder](#execution-outcome-unknown-timeout-ladder)
-  - [Write the execution receipt before the effect fires](#execution-durable-receipt-before-effect)
+  - [Persist execution state before the effect fires](#execution-durable-receipt-before-effect)
   - [Admit every request so clients reach a terminal state](#execution-admit-every-request-to-terminal-state)
   - [Journal the signed transaction before broadcasting it](#execution-journal-signed-bytes-before-broadcast)
   - [Settle only on an observed chain receipt](#execution-settle-on-observed-chain-receipt)
@@ -80,6 +80,17 @@ A candidate pack is a usable decision aid that the historical 58-card audit does
   - [Harden dependency intake and the CI supply chain](#operations-supply-chain-baseline)
   - [Scope CI by diff but fail safe](#operations-fail-safe-diff-scoped-ci)
   - [Budget fault scenarios with explicit resilience thresholds](#operations-resilience-game-day-budgets)
+- **Perpetual exchange contracts and risk** (`perps`, candidate): Perpetual order intent, market increments, position accounting, risk authority and risk-reducing execution.
+  - [Bind every perpetual order field to confirmed intent](#perps-order-intent-binding)
+  - [Quantize price and size from market metadata](#perps-market-quantization)
+  - [Make reduce-only incapable of increasing exposure](#perps-reduce-only-never-increases-risk)
+  - [Derive order state from versioned partial fills](#perps-partial-fill-order-state)
+  - [Name the authority for index and mark prices](#perps-mark-index-oracle-authority)
+  - [Calculate margin and liquidation conservatively](#perps-margin-liquidation-rounding)
+  - [Accrue and settle funding from one ledger](#perps-funding-accrual-settlement)
+  - [Bind position and margin mode to every action](#perps-position-mode-margin-scope)
+  - [Treat cancel and replace as consequential mutations](#perps-cancel-replace-unknown-outcome)
+  - [Keep risk-reducing actions available under degraded reads](#perps-risk-reducing-actions-availability)
 - **Realtime streams, client and server** (`realtime`, candidate): Concrete refinements for live data across the server WebSocket layer, the bus and stream-processing layer behind it, and browser consumption: subscribe handshake ordering, egress backpressure, identity stamping, publish dedup, checkpoint and replay positions, frame ordering, single live writers, cross-tab socket brokering and gap recovery. Load it when a change touches a socket channel, a bus subject or consumer, a stream processor's sink or checkpoint, or a client cache fed by a stream.
   - [Open live coverage before the snapshot query](#realtime-live-coverage-before-snapshot)
   - [Hold data behind its ack and fence unsubscribes](#realtime-ack-gate-and-unsubscribe-fence)
@@ -104,9 +115,9 @@ A candidate pack is a usable decision aid that the historical 58-card audit does
   - [Admit reads through route-specific priority buckets](#web-app-request-priority-buckets)
   - [Pass browser-owned scope to SSR as hints](#web-app-server-hint-cookies)
   - [Keep the server time reference through hydration](#web-app-hydration-stable-clock)
-  - [Keep third-party venue reads in the browser](#web-app-third-party-reads-browser-only)
+  - [Place third-party reads by trust and delivery contract](#web-app-third-party-reads-browser-only)
   - [Derive route identity from the page params prop](#web-app-route-identity-from-params)
-  - [Evaluate client pages under server-only layouts](#web-app-client-pages-server-layouts)
+  - [Keep server pages until route needs prove otherwise](#web-app-client-pages-server-layouts)
   - [Render merged regions from the first ready source](#web-app-progressive-merged-readiness)
   - [Unmount hidden panels and return from cache](#web-app-render-only-visible)
   - [Promote data to global only with one owner](#web-app-global-read-models)
@@ -223,13 +234,13 @@ Pack: `chain` (candidate). Topics: `chain`, `mutations`, `distributed`, `fronten
 
 ## Enforce allow-only capability policy inside the signer
 
-When a service requests signatures without prompting the user, the user's wallet signs a capability token and the signer itself checks its policy (inline, or a signer-owned preset reference) after parsing and resolving each request. Policies are versioned, allow-only (a rule must match in full; omission forbids) and strictly parsed at mint, so an unknown field fails instead of widening scope; expiry is checked on every use. Withdrawals are separate: a short-lived challenge minted only after MFA and claimed atomically once by the business operation. Refines core card authorization-single-use-intents.
+When a service requests signatures without prompting the user, the wallet signs a capability token whose normalized policy bytes or policy hash, audience, account, chain, version and expiry are bound into the signature. The signer parses and resolves every request and checks that policy itself. Policies are versioned and allow-only: a complete rule must match, omission forbids, an empty or constraint-free rule is rejected, and unknown fields fail at mint. A mutable preset may narrow existing authority, but any widening requires a newly consented token. Withdrawals are separate: a short-lived challenge minted only after MFA and claimed atomically once by the business operation. Refines core card authorization-single-use-intents.
 
 **Apply when:** Adding a signing route, token or session-key policy, transaction kind, or any flow signing without a user prompt.
 
-**Boundary notes:** An empty rule allows everything, so review breadth, not syntax. Preset references let the signer change scope in a release, narrower or wider, without the user re-consenting, so preset edits are policy changes that need review; inline policies sign exact bytes.
+**Boundary notes:** Preset references bind a versioned content hash, not only a mutable name. A release may revoke or narrow a preset, but widening authority requires user consent and a new token. Inline policies sign their normalized bytes.
 
-**Checks:** A raw message that decodes as a transaction is judged as one. Uninspectable content (raw digests, unresolved lookup-table programs) needs explicit opt-in. Regexes are anchored and size- and memory-capped. The token's signing family comes from its signature, not a declared field. Missing MFA declines. Retiring allow-all legacy tokens backfills before the switch flips.
+**Checks:** Empty policies and rules with no effective constraint are rejected; preset content hash and version are verified on every use; widening invalidates the old token; a raw message that decodes as a transaction is judged as one. Uninspectable content (raw digests, unresolved lookup-table programs) needs explicit opt-in. Regexes are anchored and size- and memory-capped. The token's signing family comes from its signature, not a declared field. Missing MFA declines. Retiring allow-all legacy tokens backfills before the switch flips.
 
 **Anti-pattern:** Check scope only in the calling API, or parse policy leniently, so the signer signs whatever arrives.
 
@@ -249,7 +260,7 @@ signer: verify(token); action = resolve(req); policy.rules.some((r) => r.matches
 
 **Legitimate exceptions:** Flows that prompt for every signature need no capability token. TTLs and MFA scope are security and product decisions to source, not defaults to invent.
 
-**Verification scenario:** Mint with an unknown field (rejected), send a transaction as a raw message against a program allowlist (denied), create a second withdrawal from one MFA approval (refused at the claim) and use the challenge after its TTL (refused).
+**Verification scenario:** Mint with an unknown field or empty rule (rejected), widen a referenced preset without a new consent (old token rejected), narrow or revoke it (old authority cannot exceed the new scope), disguise a transaction as a raw message (denied), and replay one MFA withdrawal challenge (refused).
 
 Pack: `chain` (candidate). Topics: `signing`, `authorization`, `security`, `backend`, `review`.
 
@@ -257,13 +268,13 @@ Pack: `chain` (candidate). Topics: `signing`, `authorization`, `security`, `back
 
 ## Revert only proven-orphaned blocks and forfeit gaps explicitly
 
-Keep reorg handling a pure state machine over a bounded, parent-linked window of emitted blocks: each head yields one step (commit, ignore, fetch ancestor by hash, fetch canonical by number, apply a plan) and an I/O shell fetches and emits. Revert only blocks the node proves non-canonical; a head it cannot verify, from a lagging or rewound backend, is ignored, never turned into a speculative revert. Plans emit revert, then fill, then commit; a gap wider than the window is forfeited by restarting the window at the head and counting every skipped height.
+Keep reorg handling a pure state machine over a bounded, parent-linked window of emitted blocks: each head yields one step (commit, ignore, fetch ancestor by hash, fetch canonical by number, apply a plan) and an I/O shell fetches and emits. Revert only blocks the node proves non-canonical; a head it cannot verify, from a lagging or rewound backend, is ignored, never turned into a speculative revert. Plans emit revert, then fill, then commit. A gap wider than the window may be forfeited only for an explicitly lossy non-authoritative feed with a separate verified backfill. Balances, collateral, settlement, accounting and other money authorities halt and backfill from a verified canonical checkpoint instead of skipping.
 
-**Apply when:** Building or changing a block follower, indexer or consumer turning heads into events, prices or balances.
+**Apply when:** Building or changing a block follower, indexer or consumer turning heads into events, prices or balances, after classifying whether its outputs are lossy display data or money authority.
 
 **Boundary notes:** Verify a head below the window by number, never by walking parents, which would fabricate a full-window revert. Forfeit trades completeness for liveness; it suits a real-time feed with a separate backfill.
 
-**Checks:** The core does no I/O and is unit-tested on synthetic chains. Duplicate heads and heads linking to the tip at the wrong height are ignored and logged. Deep reorgs are flagged and metered. Forfeited heights are counted per chain and cause, and alerted on. Consumers apply reverted spans idempotently. Window capacity exceeds the chain's expected reorg depth.
+**Checks:** Checkpoints include chain or genesis identity, block number and hash, output sequence, finality tier and schema generation. The core does no I/O and is unit-tested on synthetic chains. Duplicate heads and heads linking to the tip at the wrong height are ignored and logged. Deep reorgs are flagged and metered. Forfeited heights are counted per chain and cause, and alerted on. Consumers apply reverted spans idempotently. Window capacity exceeds the chain's expected reorg depth.
 
 **Anti-pattern:** Revert whenever a head's parent differs from the tip, or serially refill an unbounded gap.
 
@@ -291,13 +302,13 @@ Pack: `chain` (candidate). Topics: `chain`, `realtime`, `data`, `backend`, `impl
 
 ## Resume from the highest of independent lower bounds
 
-On restart, resume from the maximum of independent lower bounds on what was already published, such as the checkpoint the publisher writes and the newest header still on the durable output stream, because either store can lag what consumers already applied. Each read is best effort: an unreadable source contributes nothing and boot never fails on its resume point. If no source answers, go live at the head, log why and export a cold-start gauge so the gap is visible. Refines core card stream-checkpoints-and-effects.
+On restart, consider independent lower bounds only after proving they belong to the expected chain or genesis, canonical block lineage, finality tier, output sequence and schema generation. Choose the highest compatible point already acknowledged by publication. A lossy display feed may go live at the head only under its documented backfill contract. Balances, collateral, settlement and accounting fail closed when no verified checkpoint answers and require operator recovery or backfill. Refines core card stream-checkpoints-and-effects.
 
 **Apply when:** A block follower, indexer or replayer restarts, is redeployed, or gains or changes a checkpoint store.
 
 **Boundary notes:** Every candidate must be a true lower bound, written after publication was acknowledged, never an intent to publish. Going live at the head skips history, which suits a feed with a separate backfill.
 
-**Checks:** Checkpoint writes follow publish acknowledgement. Stream retention outlasts a deploy cycle. The chosen source and height are logged and exported. The plan states whether consumers tolerate a replay, a boundary block normally or a whole span when a higher source is unreadable; if not, the resume point must be exact. Tests cover stream only, checkpoint only, each one higher, and both reads failing.
+**Checks:** Checkpoint writes follow publish acknowledgement; every candidate carries block hash and chain identity and is checked against canonical lineage before height comparison. Stream retention outlasts a deploy cycle. The chosen source and height are logged and exported. The plan states whether consumers tolerate a replay, a boundary block normally or a whole span when a higher source is unreadable; if not, the resume point must be exact. Tests cover stream only, checkpoint only, each one higher, and both reads failing.
 
 **Anti-pattern:** Trust only the checkpoint store, or block boot until every store is readable.
 
@@ -317,7 +328,7 @@ const from = max(tryRead(checkpoint), tryRead(lastStreamHeader)); if none answer
 
 **Legitimate exceptions:** A gap-intolerant pipeline (balances, accounting) should refuse a cold start and wait for an operator or a backfill. A system that commits publish and checkpoint in one transaction needs only that store.
 
-**Verification scenario:** Seed checkpoint 40 with stream 70 (resume 70), checkpoint 90 with stream 70 (resume 90), then make both reads fail (process stays up, goes live at the head, cold-start gauge set).
+**Verification scenario:** Seed compatible checkpoint 40 with stream 70 (resume 70), checkpoint 90 with stream 70 (resume 90), then give the higher source an orphaned hash (reject it). Make both reads fail: a lossy feed starts at head with a gap record, while a money authority stays unready and requests backfill.
 
 Pack: `chain` (candidate). Topics: `chain`, `data`, `operations`, `backend`, `implementation`.
 
@@ -395,13 +406,13 @@ Pack: `chain` (candidate). Topics: `chain`, `storage`, `data`, `backend`, `imple
 
 ## Classify RPC failures before retrying or caching them
 
-Every chain read classifies a failure as definitive, where the chain answered (revert, undecodable return, no code), or transient, where no answer arrived (transport error, timeout, throttle, node behind the pinned block, pruned state). Detect reverts by error code or revert envelope first and never infer a node condition from revert text, because a contract chooses its own revert string. Cache probe results as Value, Absent or Unknown, negative-cache only definitive misses, and leave transient failures Unknown to re-probe. Pack card chain-breakers-only-for-interchangeable-providers decides when a failure moves traffic.
+Every chain read distinguishes a successful value, adapter-proved capability absence, typed call rejection, and transient or unknown infrastructure failure. A generic revert or undecodable return proves only that this invocation failed; it does not prove the function or capability is absent. Definitive absence needs adapter-specific positive evidence such as no code at the pinned block or a trusted interface query returning false. Transient failures are those where no authoritative answer arrived (transport error, timeout, throttle, node behind the pinned block, pruned state). Detect reverts by error code or revert envelope first and never infer a node condition from revert text, because a contract chooses its own revert string. Cache probe results as Value, Absent or Unknown. Negative-cache only adapter-proved absence; keep arbitrary reverts, undecodable output and transient failures Unknown or as typed errors, keyed to the pinned block or code version where relevant. Pack card chain-breakers-only-for-interchangeable-providers decides when a failure moves traffic.
 
 **Apply when:** Adding a contract read or account query, a capability probe (does this contract expose X), a retry wrapper, an RPC fallback chain, or a cache of contract metadata.
 
 **Boundary notes:** Retry block-not-reached on the same or another node; send state-unavailable to an archive-capable route. Pin reads to a block number when results must replay deterministically.
 
-**Checks:** A revert whose text mimics a node error still classifies as a revert. Throttle, 5xx and transport errors are transient. Probe fields added later default to Unknown on old cache entries. Absent is written only on definitive evidence. Each fallback step has its own timeout. Error text is sanitized before logging, since RPC URLs often embed API keys.
+**Checks:** A revert whose text mimics a node error still classifies as a call rejection, not Absent. Throttle, 5xx and transport errors are transient. Probe fields added later default to Unknown on old cache entries. Absent is written only on definitive evidence. Each fallback step has its own timeout. Error text is sanitized before logging, since RPC URLs often embed API keys.
 
 **Anti-pattern:** Treat any call error as 'not supported' and cache it, or retry every error including reverts.
 
@@ -416,12 +427,12 @@ try { v = await call(addr) } catch { cache.set(addr, ABSENT) }
 **Better example (illustrative):**
 
 ```text
-catch (e) { if (isDefinitive(e)) cache.set(addr, Absent); else keep Unknown and retry with backoff }
+catch (e) { if (adapterProvesAbsent(e, block)) cache.set(key, Absent); else return UnknownOrTypedError(e) }
 ```
 
 **Legitimate exceptions:** Reads that are never cached or acted on can skip the tri-state. When the SDK already distinguishes these classes, use its classification instead of re-deriving it.
 
-**Verification scenario:** Probe through a throttle, a lagging replica, a pruned-state error, a revert and a revert reading 'header not found'; expect transient, transient, archive route, Absent and Absent, with only the reverts negatively cached.
+**Verification scenario:** Probe through a throttle, lagging replica, pruned-state error, arbitrary revert, undecodable return, no-code address and trusted interface false; only the last two capability proofs become Absent, while infrastructure failures retry or reroute and call failures remain Unknown or typed errors.
 
 Pack: `chain` (candidate). Topics: `chain`, `errors`, `frontend`, `backend`, `implementation`.
 
@@ -611,7 +622,7 @@ CI diffs every committed contract artifact (REST spec and socket contract) again
 
 **Boundary notes:** Additive changes are safe only in the open direction: a new optional request field, or a new output field on an object no consumer validates strictly.
 
-**Checks:** The diff walks only reachable operations, channels and envelopes; retirement is two steps (deprecate, keep at least one release, delete); a renamed input keeps accepting the old name as a deprecated alias; a deliberate break carries an acknowledgement label and coordinated client releases; consumer validators are really strict.
+**Checks:** The diff walks only reachable operations, channels and envelopes; operation or required-field removal is always classified as breaking; retirement requires an explicit supported-client floor, usage evidence, migration and end-of-life policy, and coordinated release approval; a renamed input keeps accepting the old name as a deprecated alias; consumer validators are really strict.
 
 **Anti-pattern:** Treat 'only added a value' as backward compatible and ship a new status enum value before clients can parse it.
 
@@ -629,9 +640,9 @@ Add status 'expired' to an output enum and merge because the diff only adds line
 Ship client handling first (or an explicit unknown branch), then add the value with the break acknowledged and the client release linked.
 ```
 
-**Legitimate exceptions:** A lockstep change where every consumer ships in the same deploy can acknowledge the break deliberately. Deprecation length and which consumers count are release decisions.
+**Legitimate exceptions:** A lockstep change where every consumer ships in the same deploy can acknowledge the break deliberately. A deprecated operation may be removed only through an approved version retirement contract; deprecation alone never makes deletion compatible.
 
-**Verification scenario:** Run the checker on fixtures that add an output enum value, add a strict-object property, drop a deprecated operation and add an optional request field: the first two fail, the last two pass.
+**Verification scenario:** Run the checker on fixtures that add an output enum value, add a strict-object property, drop a deprecated operation and add an optional request field: the first three fail, and only the optional request field passes.
 
 **Automatable check:** A required CI job compares base and head artifacts with the rule table and passes a break only when the acknowledgement label is present.
 
@@ -785,13 +796,13 @@ Pack: `contracts` (candidate). Topics: `boundaries`, `realtime`, `contracts`, `f
 
 ## Seal pagination cursors and publish page bounds
 
-List endpoints use keyset pagination with an opaque cursor carrying the sort key plus a unique tie-breaker. When a cursor encodes anything the response hides (another user's id, a signature, an internal offset), seal it with authenticated encryption under a per-deployment key and bind it to a fingerprint of the request scope (caller, filters, sort). The maximum page size is declared in the schema and equals the server clamp, so generated clients know the bound.
+List endpoints use keyset pagination with an opaque cursor carrying an immutable sort tuple plus a unique tie-breaker. If the visible sort field can change or inserts can move ahead of the cursor, bind a snapshot revision or high-water mark and direction into the cursor. When a cursor encodes anything the response hides (another user's id, a signature, an internal offset), seal it with authenticated encryption under a per-deployment key and bind it to a fingerprint of the request scope (caller, filters, sort). The maximum page size is declared in the schema and equals the server clamp, so generated clients know the bound.
 
 **Apply when:** Adding or changing a paginated list, an infinite-scroll consumer, or a cursor that encodes identifiers.
 
 **Boundary notes:** A plain encoded cursor is fine when it holds only values the response already shows; sealing adds a key and a rotation story.
 
-**Checks:** A malformed, tampered or scope-mismatched cursor returns a distinct invalid-cursor error telling the client to restart from the first page, never a silent restart; tie-breakers make the order total; rotating the key intentionally retires outstanding cursors; public stand-in ids are keyed hashes, not plain digests an attacker can enumerate; the client resets its pages once on that error instead of looping.
+**Checks:** A malformed, tampered or scope-mismatched cursor returns a distinct invalid-cursor error telling the client to restart from the first page, never a silent restart; ordering is immutable for the pagination window or bound to a snapshot revision; tie-breakers make the order total; rotating the key intentionally retires outstanding cursors; public stand-in ids are keyed hashes, not plain digests an attacker can enumerate; the client resets its pages once on that error instead of looping.
 
 **Anti-pattern:** Decode a bad cursor as no cursor and serve page one, or accept a cursor after the user changed filters.
 
@@ -806,12 +817,12 @@ cursor = base64(JSON({ userId, offset })); a decode failure falls back to offset
 **Better example (illustrative):**
 
 ```text
-cursor = seal({ ts, id, scope }); open failure or scope mismatch returns an invalid-cursor error and the client restarts once.
+cursor = seal({ snapshot, immutableSort, id, direction, scope }); open or scope failure returns invalid-cursor and the client restarts once.
 ```
 
 **Legitimate exceptions:** Small bounded lists can return everything with no cursor. Offset paging is acceptable for upstreams that only page by offset, behind the same strict decode.
 
-**Verification scenario:** Tamper one byte, change a filter between pages and rotate the key: each returns the invalid-cursor error, and the client restarts once with no duplicate rows.
+**Verification scenario:** Tamper one byte, change a filter, insert ahead of the cursor, mutate a visible sort field and rotate the key; snapshot-bound pages have no duplicate or omitted rows, while invalid scope or key returns invalid-cursor and restarts once.
 
 **Automatable check:** A contract test that every list endpoint's limit parameter declares a maximum equal to the server clamp.
 
@@ -821,17 +832,17 @@ Pack: `contracts` (candidate). Topics: `contracts`, `query`, `security`, `backen
 
 ## Rename fields through a dual-name window
 
-When any consumer silently drops unknown fields (a skip-unknown ingestion queue, a stripping schema, a lenient mapper), a rename is a sequence: consumer and projection accept both names and write both, the producer cuts over, old data is backfilled, a soak proves nothing reads the old name, then the old name is removed. The window lets the producer roll forward or back at any moment with no gap. Apply schema steps dependency-first (storage, then intake, then projection) and reverse them for rollback.
+When any consumer silently drops unknown fields, a rename is a sequence: consumer and projection accept both names with explicit presence metadata, the producer writes both, old data is backfilled, a soak proves nothing reads the old name, then the old name is removed. The window lets the producer roll forward or back at any moment with no gap. Apply schema steps dependency-first (storage, then intake, then projection) and reverse them for rollback.
 
 **Apply when:** Renaming a field on a stream, a persisted record, a materialized projection or a response read by lenient consumers.
 
 **Boundary notes:** For strict generated consumers a rename is an explicit breaking change instead; prefer add-new, deprecate-old.
 
-**Checks:** The consumer side is live before the producer emits the new name; the projection writes both target fields, not only the new one; the missing leg arrives as a type default, so the merge picks the populated side; the soak is evidence-based; no single migration collapses all steps.
+**Checks:** The consumer side is live before the producer emits the new name; optional or has-bit wire types preserve absent, null and legitimate zero separately; the projection writes both target fields; precedence uses source version and explicit presence, and conflicting both-present values fail or alert; the soak is evidence-based; no single migration collapses all steps.
 
 **Anti-pattern:** Assume full-state snapshots are re-emitted, so a skew window will self-heal.
 
-**Why it fails:** Messages carrying the new name hit a consumer that ignores it, are acknowledged, and land as default zeros that supersede the last good row. Only re-emitted keys heal; dormant keys and per-interval facts stay wrong indefinitely, and the lost values never got past the wire.
+**Why it fails:** Messages carrying the new name hit a consumer that ignores it, or deserialization erases absence into a default zero that cannot be distinguished from a legitimate value and supersedes the last good row. Only re-emitted keys heal; dormant keys and per-interval facts stay wrong indefinitely, and the lost values never got past the wire.
 
 **Bad example (illustrative):**
 
@@ -842,12 +853,12 @@ One migration renames the column while the producer deploy goes out independentl
 **Better example (illustrative):**
 
 ```text
-Step 1 accept and write both names; step 2 producer cutover; step 3 backfill and soak; step 4 drop the old name.
+Step 1 accept explicit old/new presence and write both; step 2 dual-write producer; step 3 backfill and soak; step 4 retire the old field under the version policy.
 ```
 
 **Legitimate exceptions:** A lockstep deploy with no queued or stored old-format data can rename directly. If history cannot be backfilled, document which periods keep only the old name.
 
-**Verification scenario:** Run the producer with the old name, then the new name, then roll it back against the dual-name consumer: every row keeps its value under both names and no default zeros appear.
+**Verification scenario:** Run absent, null, legitimate zero, both-present-equal, both-present-conflicting, old-then-new, new-then-old and rollback fixtures; verify deterministic precedence, conflict reporting and no fabricated zero.
 
 **Automatable check:** A migration lint rejecting removal of a field in the same change that adds its replacement.
 
@@ -1211,11 +1222,11 @@ Pack: `execution` (candidate). Topics: `frontend`, `authorization`, `mutations`,
 
 ## Refresh authentication without replaying mutations
 
-After a 401, refresh credentials and retry only idempotent reads; a mutation keeps its original 401, and the refresh only prepares the next deliberate attempt. Before a mutation, refresh proactively when the session is likely expired, then re-check the account guard. REST, socket, timers and visibility checks share one refresh owner and one in-flight promise; because single-use refresh tokens can rotate even when the refresh response is lost, a failed refresh is never replayed and the session is re-read instead.
+After a 401, refresh credentials and retry only idempotent reads. A mutation keeps its original 401 and remains unresolved unless the service contract proves authentication rejects before every possible effect. Refreshing credentials never authorizes a new operation identity. Reconcile the original operation first, or deliberately replay the same stable key only under an authoritative idempotency contract. Before a mutation, refresh proactively when the session is likely expired, then re-check the account guard. REST, socket, timers and visibility checks share one refresh owner and one in-flight promise; because single-use refresh tokens can rotate even when the refresh response is lost, a failed refresh is never replayed and the session is re-read instead.
 
 **Apply when:** a diff touches an HTTP interceptor or mutator, the refresh coordinator, socket authentication or session timers.
 
-**Checks:** retry-after-refresh is gated on the GET method, not on endpoint lists; auth endpoints are never retried; the proactive refresh runs inside the not-dispatched region; cross-tab refresh is coordinated; a refresh 401 counts as recovered only when a session re-read reports a fresh token for the same user; logout suppresses refresh; a mutation from a stale account keeps its error and triggers no refresh.
+**Checks:** retry-after-refresh is gated on the GET method, not endpoint lists; auth endpoints are never retried; proactive refresh runs inside the not-dispatched region; cross-tab refresh is coordinated; a failed refresh is resolved by session re-read; logout suppresses refresh; a mutation 401 never creates a new key or new attempt until its original outcome is authoritatively rejected or reconciled.
 
 **Anti-pattern:** A generic interceptor that replays any failed request after refreshing tokens.
 
@@ -1235,7 +1246,7 @@ on 401: await sharedRefresh(); if (req.method !== 'GET') throw original401; retu
 
 **Legitimate exceptions:** A mutation whose backend contract makes replay safe (payload-bound, fail-closed idempotency with the same key) may be replayed deliberately by its owner, never by a generic interceptor. Server-rendered reads that cannot write cookies leave refresh to the browser.
 
-**Verification scenario:** Expire the access token and submit an order that gets 401: exactly one POST, one refresh and a surfaced error. Race two tabs through a refresh: one rotation wins and the other re-reads the session and stays signed in.
+**Verification scenario:** Expire the access token and return a pre-effect 401 and an ambiguous post-dispatch 401: exactly one POST in each case, the proved rejection may be retried deliberately, and the ambiguous operation stays unresolved with no fresh key. Race two tabs through a refresh: one rotation wins and the other re-reads the session and stays signed in.
 
 **Automatable check:** Transport unit test: for every non-GET method, a 401 never produces a second request.
 
@@ -1313,15 +1324,15 @@ Pack: `execution` (candidate). Topics: `frontend`, `mutations`, `execution`, `te
 
 ## Claim idempotency keys atomically and fail closed
 
-Scope the key by user and endpoint, hash a canonical serialization of the parsed payload, and claim the key with a pending record through one atomic set-if-absent with expiry before the handler runs. The claim TTL must outlive any request, at least four times the request timeout, and a finished success is stored with its status and body for a bounded replay window. A losing claimant gets the stored result, 409 for a different payload or a still-pending claim (with Retry-After), and 503 when the store cannot answer. Refines core card end-to-end-idempotency-and-integrity. Pack card execution-read-backend-idempotency-contract-first is the client-side reading of this contract.
+Scope the key by user and endpoint, hash a canonical serialization of the parsed payload, and create one durable operation record before the handler can publish an effect. The record moves through claimed, dispatched or unknown, and terminal states. It never becomes runnable solely because a TTL elapsed. The downstream effect accepts the same stable operation identity and deduplicates it, or the effect and operation state share one atomic commit boundary. A losing claimant gets the durable result, 409 for different intent or an unresolved claim, and 503 when the authority cannot answer. Refines core card end-to-end-idempotency-and-integrity. Pack card execution-read-backend-idempotency-contract-first is the client-side reading of this contract.
 
 **Apply when:** a backend handler for orders, transfers or other consequential writes accepts an idempotency key, or a middleware is chosen to provide one.
 
 **Boundary notes:** The payload hash binds the client key to its first payload; it is never the dedupe key, so identical genuine orders with different keys both execute. Require the key where a retry could repeat a fan-out.
 
-**Checks:** a claim that expired between the lost race and the read counts as in flight, not free; only 2xx results are stored and an error releases the claim, so the handler must not error after a side effect (see execution-no-whole-request-error-after-effect); a failed result write is alerted, because the key becomes runnable again when the claim expires; the side effect and its result write run so neither a timeout nor a client disconnect can cancel them in between, because an unresolved pending claim becomes runnable again when it expires; replay returns the stored status and body verbatim.
+**Checks:** the operation record survives process and request deadlines; same key plus changed intent conflicts; concurrent first attempts have one winner; a crash before dispatch resumes the claimed operation; a crash after dispatch leaves it unknown until authoritative reconciliation; no error or expiry releases a possibly dispatched operation for fresh execution; replay returns the durable status and body verbatim; retention outlives the provider reconciliation and client replay horizon.
 
-**Anti-pattern:** Check-then-set in two calls, run the handler when the store is unreachable, or accept a key not bound to its payload.
+**Anti-pattern:** Check-then-set in two calls, let an unresolved claim expire back to runnable, run when the authority is unreachable, or accept a key not bound to its intent.
 
 **Why it fails:** Two concurrent retries both pass the check and both trade; failing open executes duplicates exactly during an outage; an unbound key replays an old response for a new order and silently drops it.
 
@@ -1334,12 +1345,12 @@ if (!(await store.get(k))) { await store.set(k, 'pending'); await run() }
 **Better example (illustrative):**
 
 ```text
-if (!(await store.setIfAbsent(k, { pending: true, hash }, claimTtl))) return replayOrConflict(k, hash)
+op = await claimOnce(scope, key, intentHash); if (!op.won) return replayConflictOrPending(op); await dispatchWithStableId(op.id)
 ```
 
 **Legitimate exceptions:** Naturally idempotent writes need no claim store; retention windows are an operational decision to record.
 
-**Verification scenario:** Send two same-key requests concurrently (one runs, one gets 409), repeat after completion (replayed), change the body (409), stop the store (503, nothing runs), and expire a claim mid-race (409, no second run).
+**Verification scenario:** Send two same-key requests concurrently, crash before dispatch, crash after provider acceptance but before result persistence, replay after every configured TTL and change the body; verify one provider effect, safe resume before dispatch, unknown plus reconciliation after dispatch, durable replay and changed-intent conflict.
 
 Pack: `execution` (candidate). Topics: `backend`, `distributed`, `mutations`, `execution`, `implementation`.
 
@@ -1379,15 +1390,15 @@ Pack: `execution` (candidate). Topics: `backend`, `contracts`, `errors`, `execut
 
 ## Make outcome-unknown a terminal state with a timeout ladder
 
-When an executor hands work to a downstream engine and the reply can be lost, outcome-unknown is a terminal state reached through a ladder of timeouts. Each path's reply ceiling is about twice its worst legitimate path (submit bound plus confirmation window, doubled for queueing), and every ceiling is strictly below the window after which a reconcile sweep writes off unresolved work. Assert that ordering at compile time or startup so nobody raises a ceiling past the sweep.
+When an executor hands work to a downstream engine and the reply can be lost, outcome-unknown is a durable unresolved state reached through a ladder of timeouts. A clock proves only that the reply window ended. It never proves that the effect failed and never authorizes a refund, reservation release, replacement order or other compensation. Resolution requires an authoritative status lookup, a provider idempotency result, chain-specific impossibility proof, or explicit human adjudication.
 
 **Apply when:** an order, execution or transfer waits on an asynchronous reply from a chain engine, solver or venue, or a periodic sweep resolves stuck records.
 
 **Boundary notes:** If the reply lives only in process memory, a restart loses it and the sweep is the only safety net. What happens to a reservation (budget, balance hold) after an unknown outcome is a money-policy decision to record.
 
-**Checks:** ceilings derive from documented engine bounds, not guesses; the ceiling-below-sweep relation is asserted; the sweep runs periodically, so it also covers work orphaned by a restart; user copy says the outcome is unknown and to verify before retrying (copy is a product decision); unknown is never relabeled failed or retried automatically.
+**Checks:** ceilings derive from documented engine bounds; the sweep discovers orphaned unresolved work after restart but performs only authoritative reconciliation; user copy says the outcome is unknown and blocks a fresh attempt until policy permits it; unknown is never relabeled failed, retried or compensated from elapsed time alone; late success and late rejection each have idempotent settlement.
 
-**Anti-pattern:** A reply ceiling shorter than the engine's worst path, or a sweep that can act while the edge is still waiting.
+**Anti-pattern:** Treat a reply ceiling or reconciliation deadline as proof of failure and compensate while the original can still settle.
 
 **Why it fails:** A live swap is written off and reported failed, inviting a second trade; when the edge timeout and the sweep both compensate one execution, a reservation is released twice or a refund is issued for a trade that landed.
 
@@ -1400,30 +1411,30 @@ const replyTimeout = 30_000; const sweepWindow = 20_000 // the sweep wins the ra
 **Better example (illustrative):**
 
 ```text
-const ceiling = 2 * (submitBound + confirmWindow); assert(ceiling < SWEEP_WINDOW)
+after replyCeiling: markUnknown(op); sweep: lookupAuthoritative(op) ?? keepUnknown(op)
 ```
 
 **Legitimate exceptions:** A synchronous call whose response is the outcome needs only its request timeout and unknown-outcome handling. A path with an authoritative status lookup may resolve by lookup instead of a write-off.
 
-**Verification scenario:** Delay an engine reply past its ceiling but under the sweep window: one outcome-unknown transition and one compensation. Restart the executor with work in flight: the sweep resolves it exactly once after the window.
+**Verification scenario:** Delay acceptance past the reply ceiling, restart the executor and later deliver success, rejection and no authoritative answer; verify no compensation from time alone, one settlement for each proved outcome and a durable unknown record plus escalation for the unresolved case.
 
 Pack: `execution` (candidate). Topics: `backend`, `distributed`, `operations`, `execution`, `planning`.
 
 <a id="execution-durable-receipt-before-effect"></a>
 
-## Write the execution receipt before the effect fires
+## Persist execution state before the effect fires
 
-Give each execution a receipt row keyed by a deterministic trigger key (schedule slice, token, triggering trade), unique per order, and insert it with insert-or-do-nothing immediately before the effect goes on the wire. One inserted row means this attempt owns the effect; a conflict means it already fired, so abort with nothing sent and leave the other attempt's row untouched. Run every check that can abort without sending (budget, identity resolution) before the insert so an aborted attempt never burns the key. Refines core card stream-checkpoints-and-effects.
+Give each execution a durable row keyed by a deterministic trigger key, unique per order, before the effect can go on the wire. The row distinguishes claimed, dispatched, unknown and terminal states. A conflict means another attempt owns or completed the trigger, not that the effect necessarily fired. The owner resumes a claimed-but-unsent row and reconciles a dispatched or unknown row. Use a transactional outbox or the same stable downstream idempotency identity so a crash on either side of dispatch cannot lose or duplicate the effect. Refines core card stream-checkpoints-and-effects.
 
 **Apply when:** a trigger, schedule, limit or standing order executes trades on redeliverable events or across restarts.
 
 **Boundary notes:** An in-memory already-fired set is a cache in front of the receipt, never the authority: a miss costs a conflict round trip, never a double buy. A budget read followed by a claim is safe unlocked only with a single sequential claimant; parallel claimants need a lock or a database-side guard.
 
-**Checks:** stage order (checks, receipt, send) is documented as an invariant; an unknown spend or failed read skips the execution, so a restart can miss a buy but never double one; every inserted row ends succeeded or failed, unknown included via the sweep, or it pins the order and holds budget; in-flight rows count toward spend.
+**Checks:** stage order (abortable checks, claim, durable dispatch intent, send, authoritative outcome) is documented; a claimed row can resume sending under the same downstream identity; a dispatched row never sends again without authoritative proof that the provider rejected it before effect; every row ends terminal or remains explicitly unknown with an operator path; in-flight and unknown rows count toward spend.
 
-**Anti-pattern:** Send the swap and then record the execution, or claim the receipt before a check that can still abort.
+**Anti-pattern:** Send before durable state exists, or treat a claim row as proof that sending already occurred.
 
-**Why it fails:** A crash between send and record re-fires on redelivery and buys twice; a receipt claimed before an aborting check blocks that trigger forever, a missed trade that never retries.
+**Why it fails:** A crash between send and record re-fires and trades twice; a crash between claim and send leaves a row that a conflict-only resume mistakes for an already-fired effect, so a protective order never executes.
 
 **Bad example (illustrative):**
 
@@ -1434,12 +1445,12 @@ await sendSwap(req); await db.insert(execution) // a crash in between re-fires
 **Better example (illustrative):**
 
 ```text
-checkBudget(); resolveIdentity(); if (!(await insertReceiptOnce(orderId, triggerKey))) return; sendSwap(req)
+op = await claimTrigger(orderId, triggerKey); if (op.claimed) await dispatchWithStableId(op.id); else await resumeOrReconcile(op)
 ```
 
-**Legitimate exceptions:** One-shot user submissions behind an atomic idempotency claim need no separate receipt table. Notifications that tolerate duplicates can skip it.
+**Legitimate exceptions:** One-shot submissions need no separate receipt only when the authoritative idempotency operation and downstream effect share the required crash-safe contract. Notifications that tolerate duplicates can skip it.
 
-**Verification scenario:** Redeliver one trigger twice concurrently: one send and one conflict with nothing sent. Fail the budget read: no receipt and the next trigger can fire. Crash after the insert: the sweep resolves the row once.
+**Verification scenario:** Redeliver one trigger twice concurrently, crash after claim before send and crash after provider acceptance before acknowledgement; verify one stable provider identity, safe resume of the unsent claim and reconciliation without a second effect.
 
 Pack: `execution` (candidate). Topics: `backend`, `data`, `mutations`, `execution`, `implementation`.
 
@@ -1513,15 +1524,15 @@ Pack: `execution` (candidate). Topics: `backend`, `chain`, `signing`, `execution
 
 ## Settle only on an observed chain receipt
 
-A send that returns OK is not settlement: an accepted send with an unmoved nonce was never in the mempool. Confirm from the chain against a baseline captured before the send (block height lower bound, pre-send balance), require a successful receipt, measure the credited amount from transfer logs emitted by the expected token contract, summing inflows to and outflows from the recipient separately and netting them, and verify the intended state change happened. A net credit of zero or less is a fault, and downstream legs spend the measured amount, never a quoted or reported figure.
+A send that returns OK is not settlement, and an accepted transaction that one RPC cannot see remains unknown. Confirm inclusion from a successful receipt, then wait for the chain-specific safe or finalized policy before an irreversible downstream leg or durable user credit. Bind the receipt to its canonical block hash and reconcile reorgs. Measure credited amount from expected-contract logs by netting recipient inflows and outflows, verify resulting state, and size downstream work from the finalized measured amount rather than a quote.
 
 **Apply when:** a step advances a workflow, credits a user or sizes the next leg after a transaction or bridge fill.
 
-**Checks:** the baseline is captured before sending; a reverted receipt fails the step; the credited amount derives purely from the receipt and ignores logs from any other emitter, so a resume re-derives the same value; a net credit of zero or less raises an error; the transaction hash is recorded before any amount check that can fail, so the record never denies a real transfer; delegations and approvals are verified by reading resulting state, since a mined transaction can be a silent no-op; replica lag after a receipt is bounded by a deadline.
+**Checks:** the baseline and transaction hash are persisted before confirmation; a reverted receipt fails the step; inclusion and finality are distinct statuses; canonical block hash and chain-specific confirmation tier are stored; reorged inclusion returns to unresolved and repairs projections; credited amount ignores other emitters and is re-derived on resume; a net credit of zero or less fails; approvals are verified from resulting state; an RPC nonce or missing local mempool entry never proves rejection.
 
 **Anti-pattern:** Mark a step done when the RPC accepts the transaction or a provider reports a fill.
 
-**Why it fails:** An accepted send may never be mined, a mined no-op changes nothing, and a fee-on-transfer token credits less than quoted; advancing on any of them moves the user's money downstream on funds that never arrived.
+**Why it fails:** An accepted send may never be mined, a receipt can be reorganized out before finality, a mined no-op changes nothing, and a fee-on-transfer token credits less than quoted; advancing moves money downstream on funds that are absent or not yet canonical.
 
 **Bad example (illustrative):**
 
@@ -1532,12 +1543,12 @@ await rpc.send(tx); step.done = true; next.amountIn = quote.amountOut
 **Better example (illustrative):**
 
 ```text
-const r = await waitReceipt(hash); requireSuccess(r); const got = netCredit(r, token, recipient); if (got <= 0n) fail(); next.amountIn = got
+const r = await waitFinalizedReceipt(hash, policy); requireCanonicalSuccess(r); const got = netCredit(r, token, recipient); next.amountIn = requirePositive(got)
 ```
 
 **Legitimate exceptions:** A third-party status may signal progress or completion where no chain-observable credit exists, but amounts used downstream still come from chain reads. Reporting-only deltas may be approximate if documented.
 
-**Verification scenario:** Simulate a send accepted but never mined, a reverted swap and a swap crediting zero: none advance the route. Replay the step after success: the same credited amount is re-derived.
+**Verification scenario:** Simulate accepted-but-unseen, included-then-reorged, reverted, zero-credit and finalized-success transactions: only finalized canonical success advances, and replay re-derives the same credited amount.
 
 Pack: `execution` (candidate). Topics: `backend`, `chain`, `money`, `execution`, `review`.
 
@@ -1827,13 +1838,13 @@ Pack: `money` (candidate). Topics: `money`, `components`, `frontend`, `implement
 
 ## Keep amount inputs as raw decimal strings
 
-An amount field owns a raw string, not a number: it preserves partial input ("0.", "1.0", "-"), normalizes the Unicode minus sign, caps fraction digits at the asset's decimals, and passes the validated string to submission unchanged, so the value the field shows is the value submitted. Which separators are accepted is a locale and product decision to source; ambiguous input, such as a comma followed by exactly three digits, is rejected with a reason rather than guessed. Formatted, grouped or compacted (10K) text is display output and never re-enters a payload. A Max button writes the exact balance string floored to input precision, never a formatted label.
+An amount or price field owns a raw string, not a number: it preserves partial input ("0.", "1.0", "-"), normalizes the Unicode minus sign, and parses without floating point. Validation then applies both asset precision and the market contract: tick size, lot step, minimum size, minimum notional and price bands. Any quantization direction is explicit, and the exact normalized value shown for confirmation is the value submitted. Which separators are accepted is a locale and product decision to source; ambiguous input, such as a comma followed by exactly three digits, is rejected with a reason rather than guessed. Formatted, grouped or compacted (10K) text is display output and never re-enters a payload. A Max button writes the exact balance string floored to input precision, never a formatted label.
 
 **Apply when:** building or editing an amount, price or size input, a Max or percentage button, or the code that turns form state into a mutation payload.
 
 **Boundary notes:** non-money numeric settings, such as an integer leverage step or a count, can use a numeric input.
 
-**Checks:** the field stores the typed string; partial states keep the caret and value; fraction digits are capped to the asset's decimals at input time; the payload uses the raw validated string; Max subtracts any source-side fee with saturating math and floors; empty and invalid states block submission with a reason; compact notation is disabled for money inputs.
+**Checks:** the field stores the typed string; partial states keep caret and value; fraction digits respect asset precision; market metadata supplies tick, lot, minimum size, minimum notional and price bands; invalid increments are rejected or quantized in a named direction before confirmation; the confirmed normalized value equals the payload; Max subtracts source-side fees with saturating math and floors; empty and invalid states block with a reason; compact notation is disabled.
 
 **Anti-pattern:** Bind the field to a number re-rendered from parseFloat, or fill it from the formatted balance label.
 
@@ -1853,7 +1864,7 @@ value={raw}; onChange keeps digits and one dot capped at asset decimals; onMax s
 
 **Legitimate exceptions:** Grouping while typing is acceptable only when the stored value stays canonical and the design calls for it. Integer-only assets drop the decimal point entirely.
 
-**Verification scenario:** Type "0.", "1.0", a Unicode minus and digits past the asset's decimals, paste "1,234", then press Max on a fee-bearing source; verify stable editing, capped digits, the ambiguous paste rejected with a reason, the shown value equal to the payload string and a Max that never exceeds the balance.
+**Verification scenario:** Type partial values, Unicode minus and excess digits; paste an ambiguous separator; enter prices between ticks, sizes between lot steps, below-minimum size and below-minimum notional; verify explicit rejection or sourced quantization, confirmation equal to payload, and Max never above balance.
 
 Pack: `money` (candidate). Topics: `money`, `forms`, `frontend`, `implementation`.
 
@@ -2243,13 +2254,13 @@ Pack: `operations` (candidate). Topics: `operations`, `lifecycle`, `backend`, `f
 
 ## Ship every alert with a runbook and permission level
 
-An alert rule ships with a human runbook link, a stable runbook slug, a severity and an automation permission: safe (an agent may run the listed remediation), unsafe (diagnose and report only) or none (informational). Anything missing from the registry defaults to unsafe. Routing is a tree where only production plus critical reaches the pager, so an alert missing its environment label can never page; lint required labels so that failure is not silent.
+An alert rule ships with a human runbook link, stable slug, severity and alert-level automation posture: safe (the registered bounded remediation may run automatically), unsafe (diagnosis may run but mitigation needs explicit incident authority) or none (detection and escalation only). Anything missing from the registry defaults to unsafe. Each runbook step separately declares read-only, explicit-authority or human-only execution; alert posture never widens step authority. Routing is a tree where only production plus critical reaches the pager, so an alert missing its environment label can never page; lint required labels so that failure is not silent.
 
 **Apply when:** Adding or changing an alert, wiring automated diagnosis or remediation, or adding a telemetry dimension.
 
 **Boundary notes:** Start new alerts as unsafe and promote to safe only after watching real firings.
 
-**Checks:** Each rule has summary, description, runbook link and slug; the runbook covers likely causes, diagnosis, remediation, verification and escalation; the pager path requires the production label and critical severity; alert dimensions are fixed low-cardinality enums with no account ids, addresses, amounts or free-form error text; silences carry owner, reason, scope, expiry and a change reference and restore automatically; every rule names an owner and an escalation path.
+**Checks:** Each rule has summary, description, runbook link, slug and default posture; the runbook gives every step an execution authority and covers likely causes, diagnosis, remediation, post-mitigation verification and escalation; the pager path requires the production label and critical severity; alert dimensions are fixed low-cardinality enums with no account ids, addresses, amounts or free-form error text; silences carry owner, reason, scope, expiry and a change reference and restore automatically; every rule names an owner and an escalation path.
 
 **Anti-pattern:** Page on any error count, or let an agent restart and replay without a written remediation.
 
@@ -2315,13 +2326,13 @@ Pack: `operations` (candidate). Topics: `security`, `operations`, `backend`, `fr
 
 ## Verify data against independent sources on a schedule
 
-A scheduled checker compares published data with independent sources (the chain itself, two or more external providers) and with self-consistency recomputations such as candles re-aggregated from trades. A field fails only when the independent sources agree with each other but disagree with you; a single external source can at most warn. The exit contract separates check failed from could not run, and a missing dependency reports skip, never a silent pass. Refines core card operations-audit-and-restore.
+A scheduled checker first names whether a field has one canonical authority or only peer sources. A finalized canonical chain or authoritative venue mismatch fails directly under its documented finality and definition rules. Where no unique authority exists, compare two or more genuinely independent peers and fail only when they agree against you. Self-consistency recomputations such as candles re-aggregated from trades provide a separate signal. The exit contract separates check failed from could not run, and a missing dependency reports skip, never a silent pass. Refines core card operations-audit-and-restore.
 
 **Apply when:** Publishing derived market, position or balance data, adding a decoder for a new protocol, or wiring a scheduled data-quality job.
 
 **Boundary notes:** Never compare against a proxy of the same provider; that is circular evidence. Self-consistency checks catch pipeline bugs, not shared upstream errors.
 
-**Checks:** Exit 0 for pass with warnings allowed, 1 for a failure, 2 for could not execute; each check reports measured value, tolerance and offending samples; a canary pushes recent real transactions through the stateless decoder and fails when a protocol yields zero events across its sample (format drift); tolerances document known definitional differences; results reach a visible channel and a stored artifact.
+**Checks:** Each field names canonical or peer mode; canonical checks record finality and source identity; peer checks require independence; exit 0 is pass with warnings allowed, 1 is failure, 2 could not execute; each check reports measured value, tolerance and offending samples; a canary pushes recent real transactions through the stateless decoder and fails when a protocol yields zero events across its sample (format drift); tolerances document known definitional differences; results reach a visible channel and a stored artifact.
 
 **Anti-pattern:** Alert whenever one provider disagrees, or treat a crashed checker as a pass.
 
@@ -2336,12 +2347,12 @@ if abs(ours - providerA) > tol then fail; on exception exit 0
 **Better example (illustrative):**
 
 ```text
-Fail only if providerA and providerB agree and both differ from ours; a missing dependency is SKIP; a crash exits 2.
+A finalized canonical mismatch fails directly; without a canonical source, providerA and providerB must agree against ours; missing dependency is SKIP and crash exits 2.
 ```
 
 **Legitimate exceptions:** Fields with no independent source get self-consistency checks only. Tolerances, cohorts and schedules are owner decisions.
 
-**Verification scenario:** Feed fixtures where one provider is wrong (warn), both agree against you (fail), and the node is unreachable (skip, exit 2).
+**Verification scenario:** Feed a finalized canonical mismatch (fail), one wrong peer (warn), two independent peers agreeing against you (fail), and an unreachable required source (skip, exit 2).
 
 **Automatable check:** A scheduled CI job enforcing the exit contract, posting a digest and uploading the full report.
 
@@ -2598,6 +2609,346 @@ Run the reconnect-storm scenario: three disconnects, one live socket, no request
 **Automatable check:** A manifest validator plus a receipt evaluator in CI that fails on missing, duplicate or over-budget scenarios.
 
 Pack: `operations` (candidate). Topics: `testing`, `realtime`, `performance`, `frontend`, `review`.
+
+<a id="perps-order-intent-binding"></a>
+
+## Bind every perpetual order field to confirmed intent
+
+A perpetual order is one intent containing market, account, side, signed size, price or trigger, order type, time in force, reduce-only, post-only, leverage, margin mode, position mode, client order identity and expiry. The review screen and the submitted or signed payload resolve from the same validated command. A quote, preview or fee refresh may update derived display values, but it cannot change any intent field after confirmation without a new confirmation.
+
+**Apply when:** adding or changing market, limit, stop, take-profit, close, reduce or conditional order submission.
+
+**Boundary notes:** Defaults for time in force, leverage, margin mode and close behavior are product decisions. Backend support for a field does not authorize a client default.
+
+**Checks:** every displayed field maps to one payload field; omitted versus explicit false is preserved; account and market scope come from the current session; client order identity is stable for the attempt; expiry and trigger basis are explicit; unknown order variants fail at the boundary.
+
+**Anti-pattern:** Build the payload from mutable form stores after the user confirmed a separate summary object.
+
+**Why it fails:** A late state update can submit a different side, size, leverage or reduce-only value, turning a close into new exposure or changing liquidation risk.
+
+**Bad example (illustrative):**
+
+```text
+confirm(summary); later submit({ ...formStore, clientOrderId: newId() })
+```
+
+**Better example (illustrative):**
+
+```text
+command = validateAndFreeze(form); confirm(command); submit(command, stableOperationId)
+```
+
+**Legitimate exceptions:** A server-generated field may be absent from the client command when the contract proves it cannot alter economic intent.
+
+**Verification scenario:** Change every field after the confirmation view mounts, switch account and market, and deliver a late preview; assert the payload either remains exactly the confirmed command or requires reconfirmation.
+
+Pack: `perps` (candidate). Topics: `frontend`, `money`, `execution`, `review`, `perps`.
+
+<a id="perps-market-quantization"></a>
+
+## Quantize price and size from market metadata
+
+Validate price and size with the market's versioned tick size, lot step, minimum size, minimum notional and price bands in exact decimal or integer units. Asset decimals only bound representation; they do not define valid orders. Reject off-increment input by default. If product approves quantization, name the direction for each order type and show the quantized value before confirmation. The submitted value is the confirmed quantized value.
+
+**Apply when:** building price or size inputs, Max controls, order builders, market metadata mappers or validation errors.
+
+**Boundary notes:** Rounding direction can change execution likelihood and risk. It is a product and venue-contract decision, not a generic formatter choice.
+
+**Checks:** metadata identity and version match the selected market; no float conversion reaches validation; price and size increments are checked independently; minimum notional uses the contract's price basis; changed metadata invalidates the draft or revalidates visibly; backend rejection maps to a stable validation code.
+
+**Anti-pattern:** Accept any value within base-asset decimals and silently round it while constructing the request.
+
+**Why it fails:** Ordinary orders are rejected, or a silently rounded price or size differs from what the trader reviewed and can increase exposure.
+
+**Bad example (illustrative):**
+
+```text
+size = floorToDecimals(raw, baseDecimals); submit(size)
+```
+
+**Better example (illustrative):**
+
+```text
+parsed = exact(raw); validateStep(parsed, lotStep); confirm(parsed); submit(parsed)
+```
+
+**Legitimate exceptions:** A venue that accepts arbitrary precision and quantizes server-side still needs the server's returned normalized value shown before a consequential follow-up.
+
+**Verification scenario:** Test values on, below and between ticks and lot steps, minimum size and notional boundaries, stale metadata and a market switch; assert exact rejection or approved visible quantization.
+
+Pack: `perps` (candidate). Topics: `frontend`, `money`, `types`, `implementation`, `perps`.
+
+<a id="perps-reduce-only-never-increases-risk"></a>
+
+## Make reduce-only incapable of increasing exposure
+
+Reduce-only and close actions are enforced by the execution authority, not only by the UI. They bind account, market, position side and maximum reducible quantity, and can reduce to zero but never open, add to or flip a position. Concurrent fills and position changes are rechecked atomically at acceptance. A client may cap a draft to the latest visible position for usability, but the server remains the invariant owner.
+
+**Apply when:** implementing close, reduce-only, stop-loss, take-profit, liquidation protection or order amendment.
+
+**Boundary notes:** Hedge mode may hold independent long and short positions. The command must identify the exact position side rather than infer it from net exposure.
+
+**Checks:** reduce-only survives every mapper and adapter; partial fills decrement remaining reducible quantity; a position closed elsewhere makes the remainder cancel or reject; an opposite-side change cannot turn the order into opening exposure; cancel and close remain available during read-stream degradation under the approved action policy.
+
+**Anti-pattern:** Hide the buy or sell button based on current position and trust the submitted side to remain reducing.
+
+**Why it fails:** Stale state or a concurrent fill can make the same side increase or flip exposure, exactly when the user intended to lower risk.
+
+**Bad example (illustrative):**
+
+```text
+if (position.size > 0) submitSell(size) without reduceOnly
+```
+
+**Better example (illustrative):**
+
+```text
+submit({ positionId, side, size, reduceOnly: true }); authority rechecks reducible size atomically
+```
+
+**Legitimate exceptions:** A venue without reduce-only support needs an explicit product decision and cannot present the action as guaranteed risk reduction.
+
+**Verification scenario:** Race a close with another fill, close the position from another device, use hedge mode and over-size the close; verify no execution increases or flips exposure.
+
+Pack: `perps` (candidate). Topics: `frontend`, `money`, `execution`, `review`, `perps`.
+
+<a id="perps-partial-fill-order-state"></a>
+
+## Derive order state from versioned partial fills
+
+An order read model carries original quantity, cumulative filled quantity, remaining quantity, average fill price, fee totals and a version or sequence from the authoritative venue or engine. Apply snapshots, fills, amendments, cancels and terminal events through one pure reducer. Duplicate or older events are idempotent, cumulative fields never move backward, and terminal state does not discard late authoritative fills that occurred before cancellation took effect.
+
+**Apply when:** merging REST orders with live fills, showing progress, calculating remaining size, or reconciling cancel and replace.
+
+**Boundary notes:** Event time is display metadata unless the contract declares it as the order source. Use venue sequence, row version or authoritative cumulative totals for ordering.
+
+**Checks:** fill identity deduplicates; cumulative quantity and fees use exact units; average price is recomputed or taken from one authority; cancel-requested is distinct from cancelled; partially-filled terminal variants remain representable; account and market identity fence every event.
+
+**Anti-pattern:** Treat the first fill as filled, or let a cancel acknowledgement erase a fill that arrives later.
+
+**Why it fails:** Traders see wrong remaining exposure, PnL and fees, and may submit another order to compensate for quantity that already filled.
+
+**Bad example (illustrative):**
+
+```text
+onFill: order.status = 'filled'; onCancel: order.filled = 0
+```
+
+**Better example (illustrative):**
+
+```text
+reduceOrder(current, versionedEvent) preserves cumulative fills and derives status from filled versus total
+```
+
+**Legitimate exceptions:** A complete versioned order row can replace the model atomically, while still rejecting older versions.
+
+**Verification scenario:** Deliver duplicate fills, fill then cancel out of order, partial fill then replace, and a late pre-cancel fill; assert exact cumulative quantity, fees, remaining size and terminal state.
+
+Pack: `perps` (candidate). Topics: `frontend`, `realtime`, `execution`, `implementation`, `perps`.
+
+<a id="perps-mark-index-oracle-authority"></a>
+
+## Name the authority for index and mark prices
+
+Document the source and formula for index price, mark price and any oracle inputs, including venue set, weights, outlier rules, update cadence, staleness threshold, fallback and version. The mark used for margin, unrealized PnL and liquidation is an authoritative risk value, not a convenient ticker. Clients display its provenance and freshness but do not reconstruct a competing risk mark from public prices.
+
+**Apply when:** adding a market, oracle, price stream, PnL display, margin check, liquidation calculation or fallback provider.
+
+**Boundary notes:** Product may show a separate last trade or indicative price. Labels must distinguish it from the risk mark.
+
+**Checks:** every price has unit, timestamp, version and source kind; stale or invalid inputs produce a typed unavailable or degraded state; fallbacks cannot silently loosen risk; the same authoritative mark feeds margin, liquidation and account risk; historical corrections have an audit path.
+
+**Anti-pattern:** Fall back from a missing mark to last trade price or a client-computed average without changing state or label.
+
+**Why it fails:** Margin and liquidation diverge between systems, users see impossible PnL, and a manipulated or stale venue price can change collateral requirements.
+
+**Bad example (illustrative):**
+
+```text
+mark = backendMark ?? average(publicTickers)
+```
+
+**Better example (illustrative):**
+
+```text
+risk = resolveMark(authoritativeInputs); if unavailable, enter the approved degraded-risk state
+```
+
+**Legitimate exceptions:** A clearly labelled chart overlay may use a client-derived comparison price that never reaches risk or execution.
+
+**Verification scenario:** Stale one source, inject an outlier, remove quorum and switch fallback versions; assert the documented mark or explicit degraded state appears consistently in margin, PnL and liquidation.
+
+Pack: `perps` (candidate). Topics: `backend`, `money`, `data`, `planning`, `perps`.
+
+<a id="perps-margin-liquidation-rounding"></a>
+
+## Calculate margin and liquidation conservatively
+
+Initial margin, maintenance margin, available margin, liquidation price and risk-tier transitions use one authoritative exact arithmetic library with explicit units and rounding. Liability and required margin round toward more risk; available collateral rounds toward less available value. The calculation names cross versus isolated scope, position side, contract multiplier, fee reserve, funding liability and tier schedule. Clients consume the authoritative result and may explain inputs, but do not invent a second liquidation formula.
+
+**Apply when:** changing leverage, collateral, margin modes, risk tiers, liquidation displays or order admission.
+
+**Boundary notes:** Formulas and rounding are venue and product contracts. Record versioned examples before implementation.
+
+**Checks:** zero, negative and overflow cases are typed; every tier boundary has tests on both sides; cross-margin aggregation names included assets and haircuts; isolated calculations cannot read unrelated collateral; fee and funding reserves are included once; display precision cannot flow back into admission.
+
+**Anti-pattern:** Compute liquidation price in the browser from rounded position and balance labels.
+
+**Why it fails:** The displayed threshold disagrees with the engine, a one-unit rounding error can admit excess risk, and cross or isolated funds can be counted in the wrong scope.
+
+**Bad example (illustrative):**
+
+```text
+liq = Number(entry) - Number(balance) / Number(size)
+```
+
+**Better example (illustrative):**
+
+```text
+result = riskEngine.calculate(versionedExactInputs); client renders result with formula version
+```
+
+**Legitimate exceptions:** Educational estimates may be client-computed only when labelled approximate and never used for admission or alerts.
+
+**Verification scenario:** Test long and short, cross and isolated, every tier edge, tiny collateral, funding owed and credited, fee reserve, overflow and rounding boundaries against authoritative vectors.
+
+Pack: `perps` (candidate). Topics: `backend`, `money`, `data`, `implementation`, `perps`.
+
+<a id="perps-funding-accrual-settlement"></a>
+
+## Accrue and settle funding from one ledger
+
+Funding rate, interval, index and settlement use one versioned ledger authority. Accrual is exact over the position quantity and documented price basis, with sign conventions tested for long and short. Position changes split accrual at the authoritative event boundary so closed quantity is not charged for a later interval. Replays and corrections are idempotent ledger entries, never destructive overwrites, and account equity and realized PnL consume the same settled facts.
+
+**Apply when:** implementing funding rates, countdowns, position history, account equity, settlement jobs or corrections.
+
+**Boundary notes:** A displayed next funding estimate is not settled funding. Label estimates and keep them out of authoritative PnL.
+
+**Checks:** interval identity is unique; late or duplicate jobs do not double charge; long and short signs are symmetric; partial close and position flip split accrual correctly; rate and price basis carry units and versions; corrections preserve an audit trail; settlement failure leaves a resumable state.
+
+**Anti-pattern:** Recompute historical funding from the latest position size or overwrite the previous total when a job retries.
+
+**Why it fails:** Users are charged twice or for exposure they no longer held, equity diverges from the ledger, and a correction cannot be audited.
+
+**Bad example (illustrative):**
+
+```text
+account.funding += currentSize * rate whenever the timer fires
+```
+
+**Better example (illustrative):**
+
+```text
+appendFundingOnce(account, positionVersion, intervalId, exactAccrual)
+```
+
+**Legitimate exceptions:** A fully external venue may provide authoritative funding ledger entries; ingest and reconcile them rather than recreating the formula.
+
+**Verification scenario:** Retry one interval, partially close before settlement, flip side, correct a published rate and restart the job; verify one auditable entry per segment and exact equity reconciliation.
+
+Pack: `perps` (candidate). Topics: `backend`, `money`, `data`, `implementation`, `perps`.
+
+<a id="perps-position-mode-margin-scope"></a>
+
+## Bind position and margin mode to every action
+
+One-way versus hedge position mode and cross versus isolated margin mode are explicit account or market state with versioned transition rules. Every order, close, collateral change and leverage update binds the expected mode and exact position identity. A mode change is rejected while incompatible orders or positions exist unless the product contract defines an atomic migration. Account switches clear every draft and cached risk projection before another action becomes available.
+
+**Apply when:** adding hedge mode, isolated margin, leverage editing, collateral transfer or position selection.
+
+**Boundary notes:** Which transitions are allowed and whether open orders block them are product and risk decisions.
+
+**Checks:** long and short position ids remain distinct in hedge mode; a close identifies the intended side; isolated collateral cannot leak into cross available margin; mode version conflicts return a stable error and refresh; drafts reset on account or mode change; URLs and local storage do not become authority for mode.
+
+**Anti-pattern:** Infer mode from the number of positions, or submit a close by market symbol alone.
+
+**Why it fails:** The wrong side closes, collateral is counted twice, or a stale draft created under one mode opens exposure under another.
+
+**Bad example (illustrative):**
+
+```text
+close({ market, size }) and let the server infer which position
+```
+
+**Better example (illustrative):**
+
+```text
+close({ accountId, positionId, side, size, modeVersion, reduceOnly: true })
+```
+
+**Legitimate exceptions:** A venue supporting only one immutable mode can omit the field after the boundary adapter proves that invariant.
+
+**Verification scenario:** Switch account, change cross to isolated, enable hedge mode with both sides open and submit from a stale draft; verify reset or version conflict and no action reaches the wrong position.
+
+Pack: `perps` (candidate). Topics: `frontend`, `money`, `state`, `review`, `perps`.
+
+<a id="perps-cancel-replace-unknown-outcome"></a>
+
+## Treat cancel and replace as consequential mutations
+
+Cancel and replace use stable operation identities and authoritative order versions. A lost response is unknown: reconcile the original order and operation before another cancel or replacement. Replace is not assumed atomic unless the venue contract proves it. Where cancel then create are separate, expose the interval and never report the new order active before its acknowledgement. A replacement cannot bypass reduce-only, margin or price-band validation.
+
+**Apply when:** implementing cancel, amend, replace, batch cancel, reconnect recovery or retry behavior.
+
+**Boundary notes:** Risk-reducing cancel should remain reachable during read-stream degradation through the authoritative mutation path, but product policy owns the user message and fallback.
+
+**Checks:** same key plus same intent replays; changed replacement intent conflicts; order version or expected state prevents stale amendment; partial fills between request and acceptance are handled; unknown outcome does not mint a new key; batch results are per order and terminally reconcilable.
+
+**Anti-pattern:** On cancel timeout, submit a replacement with a fresh identity and assume the old order disappeared.
+
+**Why it fails:** Both orders can remain live, doubling exposure, or a fill during the gap makes the replacement exceed the intended remaining size.
+
+**Bad example (illustrative):**
+
+```text
+catch cancelTimeout { place(replacement, newKey()) }
+```
+
+**Better example (illustrative):**
+
+```text
+markUnknown(cancelOp); lookup(orderId); replay same key only under the documented contract
+```
+
+**Legitimate exceptions:** An exchange-native atomic amend with payload-bound idempotency can be one operation, but its exact semantics require contract tests.
+
+**Verification scenario:** Lose cancel acknowledgement, partially fill during cancel, reject a stale order version and replay a replace response; verify no duplicate live order and correct remaining exposure.
+
+Pack: `perps` (candidate). Topics: `backend`, `money`, `execution`, `implementation`, `perps`.
+
+<a id="perps-risk-reducing-actions-availability"></a>
+
+## Keep risk-reducing actions available under degraded reads
+
+Define freshness requirements per action. Opening or increasing exposure may require fresh balances, positions and risk parameters. Cancelling an order, closing or reducing a position and lowering leverage should remain reachable through the authoritative mutation contract when live reads degrade, unless a recorded money policy proves stale state makes that action unsafe. Stream health informs the decision and messaging; it is not blanket authorization.
+
+**Apply when:** gating controls on socket state, reconnect, auth refresh, stale queries or degraded backend health.
+
+**Boundary notes:** Exact allowed actions and copy are product and risk decisions. The default safety question is whether blocking traps the user in exposure.
+
+**Checks:** every action has a freshness policy; risk-increasing and risk-reducing actions are distinct; cancel and reduce-only paths do not depend on unrelated feeds; the server rechecks current state; degraded UI explains uncertainty without fabricating balances; recovery never replays a mutation.
+
+**Anti-pattern:** Disable the whole trading surface whenever any socket reconnects.
+
+**Why it fails:** A market-data or history blip prevents the user from cancelling or reducing a live position, increasing loss while the mutation backend may be healthy.
+
+**Bad example (illustrative):**
+
+```text
+disabled = socket.status !== 'connected' for open, cancel and close
+```
+
+**Better example (illustrative):**
+
+```text
+disabledReason = actionFreshnessPolicy[action].evaluate(authoritativeHealth)
+```
+
+**Legitimate exceptions:** If the mutation itself depends on stale client-computed data, block it until the contract is redesigned or freshness is restored.
+
+**Verification scenario:** Degrade trades, orders, balances and risk-parameter streams separately; verify sourced policy for new exposure and continued cancel or reduction where the authoritative mutation remains safe.
+
+Pack: `perps` (candidate). Topics: `frontend`, `money`, `realtime`, `planning`, `perps`.
 
 <a id="realtime-live-coverage-before-snapshot"></a>
 
@@ -2925,7 +3276,7 @@ Pack: `realtime` (candidate). Topics: `realtime`, `cache`, `frontend`, `implemen
 
 ## Keep one live writer per socket-owned cache
 
-Before implementation, name the single authoritative live writer for each read model. Once a socket owns a query, disable mount, focus, reconnect, interval and mutation-triggered refetches for it; a late REST or socket result may be version-merged only to stop it regressing newer state. Enforce ownership with lint whose guarded and exempted paths must still exist: a guard on a deleted path protects nothing. Refines core card state-single-owner.
+Before implementation, name the single authoritative live writer for each read model. Once a socket owns a query, feature components do not independently mount-refetch, invalidate or poll it. The live coordinator owns continuity checks and the one authoritative resume or re-snapshot when focus, visibility, online state, heartbeat or sequence evidence says continuity is unproven. A late REST or socket result is version-merged so it cannot regress newer state. Enforce ownership with lint whose guarded and exempted paths must still exist: a guard on a deleted path protects nothing. Refines core card state-single-owner.
 
 **Apply when:** a diff adds invalidate, refetch, setQueryData or polling on a stream-written key, a settle step invalidates a socket-owned entity, or lint config names owner paths.
 
@@ -2933,7 +3284,7 @@ Before implementation, name the single authoritative live writer for each read m
 
 **Checks:** the PR lists every production writer to the key; settlement comes from the authoritative live event; the lint rule resolves aliased imports and intermediate variables, not only literal calls; CI fails when a guarded file, directory or glob matches nothing.
 
-**Anti-pattern:** add a focus or reconnect refetch to fix staleness on a socket-owned cache, or leave a lint allowlist pointing at a writer module that was moved.
+**Anti-pattern:** let each component refetch on focus, or disable every visibility and reconnect check so a suspended client can keep stale money data marked live.
 
 **Why it fails:** the REST response is older than frames already applied and overwrites them, so a just-bought position or fill flickers away; a guard scoped to a deleted path silently allows writes from anywhere.
 
@@ -2946,7 +3297,7 @@ useQuery({ queryKey: positionsKey, refetchOnWindowFocus: true }) plus invalidate
 **Better example (illustrative):**
 
 ```text
-one live owner writes positionsKey; refetchOnWindowFocus: false; settle from the live event
+one live owner writes positionsKey; components do not refetch; the coordinator proves continuity or performs one resume or re-snapshot
 ```
 
 **Legitimate exceptions:** a read model with no reliable stream may poll under a bounded policy. A declared recovery that proves single ownership transfer and version ordering is allowed.
@@ -2961,13 +3312,13 @@ Pack: `realtime` (candidate). Topics: `cache`, `realtime`, `query`, `frontend`, 
 
 ## Apply live frames after snapshot and ack latches
 
-A client read model goes live only when two latches resolve: its REST snapshot is installed and the matching subscription ack has arrived. Start REST immediately instead of waiting for the ack, and declare per read model what happens to frames that arrive first: buffer them (bounded, scoped to the subscription epoch, applied after the snapshot through the version guard) or drop them. Fence every late REST response, ack and frame by route identity and account generation. Refines core card realtime-snapshot-delta-contract.
+A client read model goes live only when snapshot and stream coverage are aligned. If the snapshot carries a stream position, start both and resume from that position. Without a position, establish and acknowledge live coverage first, begin a bounded epoch-scoped buffer, then fetch and install the snapshot before applying buffered newer frames through the version guard. Buffer overflow marks the model stale and restarts the handoff; it never silently drops money-relevant deltas. Fence every late REST response, ack and frame by route identity and account generation. Refines core card realtime-snapshot-delta-contract.
 
 **Apply when:** a feature seeds from REST then applies socket frames for the same entities, or reconnects a route owning money-relevant state such as orders or balances.
 
-**Boundary notes:** dropping early frames is safe only when every frame is a complete versioned row and a missed change heals on that row's next frame; anything else buffers. A snapshot without a stream position cannot be lined up exactly, so record a suspected gap.
+**Boundary notes:** Dropping an early frame is allowed only for a complete-state channel whose next frame replaces the whole model. A snapshot without a stream position cannot safely run before coverage for orders, positions, balances or other sparse updates.
 
-**Checks:** latch state is per route and epoch; on reconnect the installed cache is retained, and where the declared policy needs repair, one exact reconciliation runs after the replacement ack, then buffered post-ack frames apply so newer stream state wins; focus, visibility and online events trigger nothing; no recovery path replays a mutation.
+**Checks:** latch state is per route and epoch; coverage exists before an unpositioned snapshot starts; buffer byte and frame caps are explicit; overflow revokes readiness and restarts; on reconnect one exact resume or re-snapshot runs when continuity is unproved, then buffered newer frames win; visible and online transitions ask the coordinator to prove continuity; no recovery path replays a mutation.
 
 **Anti-pattern:** apply frames as soon as they arrive, before the snapshot lands, then let the snapshot replace the cache.
 
@@ -2982,12 +3333,12 @@ socket.onFrame(f => cache.apply(f)); cache.set(await fetchSnapshot())
 **Better example (illustrative):**
 
 ```text
-await Promise.all([snapshotInstalled, ackFor(epoch)]); buffered.filter(isNewerThanCache).forEach(apply)
+await ackFor(epoch); startBoundedBuffer(epoch); install(await snapshot()); applyNewer(buffered); markLive()
 ```
 
 **Legitimate exceptions:** complete-snapshot channels may let the first socket snapshot satisfy readiness through a shared coordinator. Routes whose frames self-heal need no reconnect reconciliation; do not add one.
 
-**Verification scenario:** hold REST, deliver the ack and two frames, release REST and assert the declared policy; reconnect and assert at most one reconciliation, after the replacement ack.
+**Verification scenario:** ack coverage, hold REST, deliver two frames, release REST and assert both apply once; overflow the buffer and assert readiness revokes and handoff restarts; reconnect or resume from suspension and assert one continuity repair.
 
 Pack: `realtime` (candidate). Topics: `realtime`, `cache`, `lifecycle`, `frontend`, `implementation`.
 
@@ -3065,13 +3416,13 @@ Pack: `realtime` (candidate). Topics: `types`, `boundaries`, `realtime`, `fronte
 
 ## Declare which stream health can block actions
 
-Keep a typed registry of the read models whose live health is authority for user actions, such as the balance and order streams a submit depends on, and derive gating from it through an exhaustive status-to-message map instead of ad hoc checks. Recovery that only refreshes existing data does not revoke action authority; a degraded authority stream does. Actions also wait until the socket has applied the latest credential refresh, so a submit never relies on a stream still bound to the old session. Refines core card lifecycle-readiness-and-user-feedback.
+Keep a typed policy per action naming which read models, if any, must be fresh. Stream health is freshness evidence, not authorization by itself. Risk-increasing submissions may block under an approved contract; cancel, close, reduce-only and other risk-reducing actions remain available through the authoritative mutation path unless an explicit money policy proves stale state is required. Derive any gating and explanation through an exhaustive status map. Actions also wait until the socket has applied the latest credential refresh, so a submit never relies on a stream still bound to the old session. Refines core card lifecycle-readiness-and-user-feedback.
 
 **Apply when:** a submit, cancel or transfer depends on live balances or order state; a channel joins the recovery set; auth refresh or reconnect logic changes.
 
 **Boundary notes:** which actions block and the messages shown are product decisions and must be sourced. The registry makes the decision explicit and testable; it does not choose it.
 
-**Checks:** the registry is an as-const list typed against authenticated channel names; every status has a mapping; the session check compares the latest successful refresh revision with the revision the socket applied; non-authority channels such as trades or history never block; disabled controls show the mapped reason.
+**Checks:** the registry is keyed by action and typed against authenticated channel names; every status has a mapping; risk-reducing actions have an explicit degraded-stream policy and are never disabled merely because the read stream reconnects; the session check compares the latest successful refresh revision with the revision the socket applied; non-authority channels such as trades or history never block; disabled controls show the mapped reason.
 
 **Anti-pattern:** block every action whenever any socket reconnects, or never block and let users submit against unconfirmed balances.
 
@@ -3086,12 +3437,12 @@ disabled = !socket.connected
 **Better example (illustrative):**
 
 ```text
-disabled = blockMessage[statusOf(authorityChannels)] !== null || authRefreshSeq > socketAuthSeq
+policy = actionFreshness[action]; disabled = policy.mayBlock && policy.reason(streams) !== null
 ```
 
 **Legitimate exceptions:** read-only views need no action authority. If server validation already rejects stale submissions safely, gating may be limited to messaging, which is a product decision.
 
-**Verification scenario:** degrade the balance stream and assert submit is disabled with the mapped message; degrade a trades stream and assert submit stays enabled; complete an auth refresh before the socket re-authenticates and assert submit waits.
+**Verification scenario:** degrade balances and assert a sourced risk-increasing submit policy; degrade orders and assert cancel and reduce-only remain reachable unless the approved contract says otherwise; degrade trades and keep unrelated actions enabled; verify auth revision only gates actions that use the stale socket identity.
 
 Pack: `realtime` (candidate). Topics: `realtime`, `lifecycle`, `execution`, `frontend`, `planning`.
 
@@ -3171,13 +3522,13 @@ Pack: `realtime` (candidate). Topics: `performance`, `realtime`, `frontend`, `im
 
 ## Lease live resources by canonical query key
 
-Identify each live resource by its canonical query key (endpoint, scope, parameters, source generation and, for private data, account identity) and let every consumer, whether sync component, reader or hover preload, acquire an internal lease on it. The first lease starts the snapshot and the live writer and later ones reuse them; after the final release a short grace period lets a re-acquire keep the snapshot and channel, and final disposal aborts pending work, unsubscribes, stops timers and removes unobserved cache entries. Refines core card realtime-subscription-lifecycle.
+Identify each live resource by its stable data query key (endpoint, scope, parameters and, for private data, account identity). Keep connection or subscription generation inside the coordinator, never in the data key, and let every consumer, whether sync component, reader or hover preload, acquire an internal lease on it. The first lease starts the snapshot and the live writer and later ones reuse them; after the final release a short grace period lets a re-acquire keep the snapshot and channel, and final disposal aborts pending transport work, unsubscribes and stops timers. Cache removal is a separate identity, permission or retention decision, not a routine disconnect side effect. Refines core card realtime-subscription-lifecycle.
 
 **Apply when:** intent preloading warms data a page will read, several components need the same stream, or teardown currently follows one component's unmount.
 
 **Boundary notes:** account-scoped resources must define account and session invalidation before adopting grace, so a lease never carries one account's stream into another session. Snapshot and live merge rules stay in each adapter; the lease layer does not guess them.
 
-**Checks:** components never create consumer ids or count readers; timed leases expire on their own; readers do not refetch on mount or focus over the writer; callbacks from retired subscription epochs are rejected; an explicit retry restarts the shared writer once for concurrent callers.
+**Checks:** reconnecting changes the coordinator epoch without changing the data key; components never create consumer ids or count readers; timed leases expire on their own; readers do not refetch on mount or focus over the writer; callbacks from retired subscription epochs are rejected; an explicit retry restarts the shared writer once for concurrent callers.
 
 **Anti-pattern:** each hook opens its own subscription, or the first consumer to unmount tears the stream down.
 
@@ -3197,7 +3548,7 @@ useLiveLease(resource, input) leasing by canonical key, with grace before dispos
 
 **Legitimate exceptions:** a single-consumer screen can own a plain subscription. Account- or filter-scoped writers may keep immediate teardown instead of grace.
 
-**Verification scenario:** acquire from hover, mount the page during grace and assert one subscription and no refetch; release all and assert abort, unsubscribe and cache removal after grace; switch account and assert no lease survives.
+**Verification scenario:** acquire from hover, mount during grace and assert one subscription and stable cache key; reconnect and assert a new epoch reuses the same data entry; release all and assert transport teardown; switch account and assert no lease or private cache survives.
 
 Pack: `realtime` (candidate). Topics: `subscriptions`, `cache`, `realtime`, `frontend`, `implementation`.
 
@@ -3209,9 +3560,9 @@ Decide per channel how a client recovers lost frames, and write it into the chan
 
 **Apply when:** designing a channel, a reconnect or shedding path, or a heartbeat, especially when deltas over large models (order books, long lists) make snapshots expensive.
 
-**Boundary notes:** give liveness to the client: it sends pings, counts any inbound frame as alive, and reconnects when a pong deadline passes with no traffic, without arming deadlines in hidden tabs where timers are throttled. The server answers pings and sheds peers it cannot write to.
+**Boundary notes:** give liveness to the client: it sends pings, counts any inbound frame as alive, and reconnects when a pong deadline passes with no traffic. Hidden tabs may suspend deadlines, but then continuity becomes unproven; the visible or online transition must resume or re-snapshot before money data regains action authority. The server answers pings and sheds peers it cannot write to.
 
-**Checks:** the contract names the recovery model; with re-snapshot, every shed, heartbeat timeout and reconnect resubscribes and re-reads the base before the cache is trusted; with resume, a sequence gap or expired token falls back to a snapshot; a shared-worker socket owns one heartbeat for all tabs.
+**Checks:** the contract names the recovery model; visibility and online transitions check the last proven continuity epoch; with re-snapshot, every shed, heartbeat timeout, unproven resume and reconnect resubscribes and re-reads the base before the cache is trusted; with resume, a sequence gap or expired token falls back to a snapshot; a shared-worker socket owns one heartbeat for all tabs.
 
 **Anti-pattern:** reconnect, resubscribe and keep applying deltas to the old cache as if nothing was lost.
 
@@ -3371,19 +3722,19 @@ Pack: `web-app` (candidate). Topics: `frontend`, `state`, `subscriptions`, `impl
 
 <a id="web-app-third-party-reads-browser-only"></a>
 
-## Keep third-party venue reads in the browser
+## Place third-party reads by trust and delivery contract
 
-Data from endpoints you do not operate (venues, aggregators, external APIs) is fetched only in the browser after hydration, never during server rendering or through streamed query hydration. Server requests leave from a few shared hosting IPs, so every page view hits the vendor from the same addresses and gets rate limited, and vendor latency holds the HTML stream open. The region still renders its real surface with null data in the HTML, while surrounding first-party critical data keeps streaming.
+Classify every third-party read by credential secrecy, request signing, authorization, CORS, privacy, cacheability, consistency and vendor quota. Secret-bearing, server-authorized or normalized authoritative reads go through a first-party server boundary. Public CORS-safe data may load directly in the browser when user-distributed quotas and latency make that preferable. Server rendering uses only sources whose cache and timeout contract protects the response stream. The region still renders its real surface with null data in the HTML, while surrounding first-party critical data keeps streaming.
 
 **Apply when:** a server component, layout bootstrap or server-rendered suspense query calls an external API, or a diff adds query keys for a vendor.
 
 **Boundary notes:** Placement is separate from priority: a vendor ticker still waits for its bucket, while a critical vendor balance starts once browser prerequisites allow.
 
-**Checks:** the dehydration predicate refuses vendor queries by registered key root or meta flag even if a server render reaches them, and no opt-in overrides it; socket-owned account queries (never stale, no refetch) are excluded unless opted in, since a snapshot from before the subscription would never be repaired; a vendor addend in a first-party total renders the first-party part with the addend marked busy.
+**Checks:** every vendor registry entry declares placement and why; browser-direct reads contain no reusable credential or server-only signature and satisfy CORS and privacy policy; server reads use bounded timeout, cache and quota ownership; the dehydration predicate follows that registry instead of a global vendor ban; socket-owned account queries (never stale, no refetch) are excluded unless opted in, since a snapshot from before the subscription would never be repaired; a vendor addend in a first-party total renders the first-party part with the addend marked busy.
 
-**Anti-pattern:** Prefetch a venue catalog in a server layout and stream it to the browser through query hydration.
+**Anti-pattern:** Put every vendor read in the browser, or every vendor read on the server, without classifying its trust and delivery contract.
 
-**Why it fails:** Shared server IPs exhaust the vendor's rate limit for all users at once, pages wait on vendor latency, and one throttling episode blanks server-rendered prices.
+**Why it fails:** Browser-only placement can expose credentials, fail CORS and let untrusted clients become the source of a sensitive fact; server-only placement can exhaust shared-IP quotas and hold HTML on vendor latency.
 
 **Bad example (illustrative):**
 
@@ -3394,12 +3745,12 @@ await queryClient.prefetchQuery(venueMarketsQuery) inside a server layout.
 **Better example (illustrative):**
 
 ```text
-Render <MarketsSurface data={null} /> in the HTML, mount the vendor reader after hydration, and tag its query with a third-party key root.
+Public ticker: browser query under the vendor registry; signed account balance: first-party proxy with scoped credential, cache and timeout policy.
 ```
 
 **Legitimate exceptions:** Reads through a first-party proxy you operate, with its own cache and quota contract, are first-party server requests with their own priority.
 
-**Verification scenario:** Log server-side outbound requests on a direct visit and assert none hit vendor hosts; assert the dehydrated payload has no vendor or socket-owned keys and the surface frame is in the HTML.
+**Verification scenario:** Exercise public CORS-safe, secret-bearing, signed and no-CORS vendors; verify registry-selected placement, no client credential exposure, bounded server behavior and hydration only for approved server-owned keys.
 
 **Automatable check:** Unit-test the dehydration predicate with vendor key roots, meta flags, opt-ins and socket-owned keys.
 
@@ -3443,17 +3794,17 @@ Pack: `web-app` (candidate). Topics: `frontend`, `state`, `boundaries`, `types`,
 
 <a id="web-app-client-pages-server-layouts"></a>
 
-## Evaluate client pages under server-only layouts
+## Keep server pages until route needs prove otherwise
 
-Next.js 16 with Cache Components and partial prefetching (verify both are stable in your version) prefetches one reusable shell per route that carries session data but not URL data, unless runtime prefetching resolves params per URL. A server page reading params or searchParams thus needs a per-URL server render at navigation, while a client page reads URL data in the browser so one shell serves every URL of the route. So pages become top-level client components that compose regions and unwrap params inside Suspense, while layouts are the only server components and start metadata, hints and critical reads unawaited. Evaluate it as an architectural choice against your router version and route mix.
+Keep Next.js pages and layouts as server components by default. Read promised params in the route owner, perform route-local authorization, metadata and server-only composition there, and place the interactive trading workspace in the smallest client child. Use Suspense or the framework's current cache and partial-rendering primitives around dynamic regions. Opt an entire page into client mode only when measured navigation behavior requires it and no route-local server responsibility is lost.
 
 **Apply when:** planning routing for a Next.js 16 app with many dynamic routes, or reviewing a page that exports segment config, reads cookies or awaits params outside Suspense.
 
 **Boundary notes:** Content, auth and admin routes with little in-app navigation can stay server pages.
 
-**Checks:** pages export no segment config or metadata and contain no server components; params are unwrapped inside Suspense (a read outside any boundary blocks the shell prerender and fails the build); layouts await nothing at their root; deferred regions create no server promises; hard loads still stream critical first-party content.
+**Checks:** page and layout responsibilities match the repository's Next.js version; route authorization and metadata remain server-owned; client boundaries contain only interactive state; params are resolved at the correct boundary; hard loads stream approved critical content; navigation and JavaScript cost are measured before whole-page clientization.
 
-**Anti-pattern:** Await params at the top of a server page that renders an entire trading workspace.
+**Anti-pattern:** Make every page client-only to avoid one dynamic server read, or keep an entire interactive workspace server-owned.
 
 **Why it fails:** Every navigation waits on a dynamic server round trip, and switching entities of one route flashes loading for data the browser already holds.
 
@@ -3466,14 +3817,14 @@ export default async function Page({ params }) { const { id } = await params; re
 **Better example (illustrative):**
 
 ```text
-A 'use client' page wraps <RouteClient params={params} /> in Suspense with <WorkspaceSurface data={null} /> as fallback.
+Server Page resolves params, authorization and metadata, then renders <TradingWorkspaceClient marketId={marketId} /> inside the approved boundary.
 ```
 
 **Legitimate exceptions:** A route needing per-request server-only work in the page body, with no client equivalent, can stay server-rendered; record why.
 
 **Verification scenario:** Navigate between two entities of one route and assert no dynamic route-payload request and no loading surface for cached data; on a hard load with hydration held, assert critical content is in the streamed HTML.
 
-**Automatable check:** A build-time check that app pages start with 'use client' and export only a default component.
+**Automatable check:** A boundary check rejects server-only imports from client modules and flags whole-page clientization for explicit review.
 
 Pack: `web-app` (candidate). Topics: `frontend`, `planning`, `performance`, `composition`.
 
@@ -3481,7 +3832,7 @@ Pack: `web-app` (candidate). Topics: `frontend`, `planning`, `performance`, `com
 
 ## Render merged regions from the first ready source
 
-When a region merges independent sources (one per chain, venue or market) and any single result is useful, start every admitted source query in parallel, including during SSR, and suspend only until the first succeeds; a successful empty result counts as ready, a failure does not. The data component merges the entries that exist and passes real data to the surface; later results and live updates flow through the same per-source cache entries. To stream later results as HTML, nest UI Suspense stages that each wait for one more settled source, with the populated surface as fallback.
+When a region merges independent sources (one per chain, venue or market) and any single result is useful, start every admitted source query in parallel, including during SSR, and suspend only until the first succeeds; a successful empty result counts as ready, a failure does not. The data component merges the entries that exist and passes real data to the surface; later results and live updates flow through the same per-source cache entries. Use an explicit aggregate over ordinary query results so partial success, pending and per-source failure stay identifiable. If server streaming is required, wait for first success with success-only semantics rather than `Promise.race`, and include only SSR-eligible sources.
 
 **Apply when:** a grid or list combines per-source queries and one slow source holds back the rest, or a diff wraps every source in one all-or-nothing suspense call.
 
@@ -3502,12 +3853,12 @@ queryClient.setQueryData(sourceKey, []) for every source so the grid renders imm
 **Better example (illustrative):**
 
 ```text
-Throw a race of the pending source promises until one has data, then render the merge and let query observers deliver the rest.
+useQueries starts every source; render resolved entries by source key; pending and failed sources keep their own status without blanking successful data.
 ```
 
 **Legitimate exceptions:** Two or three fast co-located sources can share one boundary; staging is worth its cost when tail latency differs materially between sources.
 
-**Verification scenario:** Delay one source, fail another and resolve a third with an empty list; assert the region renders the empty-but-ready result, retries the failure locally, and streams the delayed source into HTML when it resolves before hydration.
+**Verification scenario:** Reject one source first, delay another and resolve a third with an empty list; assert rejection does not blank the region, the empty success establishes readiness, source identity stays intact and only SSR-eligible results stream.
 
 Pack: `web-app` (candidate). Topics: `frontend`, `query`, `components`, `performance`, `implementation`.
 
@@ -3515,13 +3866,13 @@ Pack: `web-app` (candidate). Topics: `frontend`, `query`, `components`, `perform
 
 ## Unmount hidden panels and return from cache
 
-Inactive tabs, closed panels, collapsed sections and drawers unmount when not shown instead of staying alive via force-mount, preserve-content tabs, display:none or hidden Activity boundaries. Instant return comes from the query cache and an admitted live owner: the region re-renders from cached entries and shows null-data surfaces only for scopes never loaded. The cost compounds where the router retains hidden routes (Next.js App Router keeps several visited routes mounted for back navigation), multiplying every hidden region. Refines core card react-performance-evidence.
+Choose unmounting or retained hidden state from measured cost and state-lifetime needs. Ordinary hidden DOM with live effects should unmount, while a framework Activity boundary may preserve expensive local state if its effects and subscriptions clean up correctly while hidden. Instant return comes from the query cache and an admitted live owner: the region re-renders from cached entries and shows null-data surfaces only for scopes never loaded. The cost compounds where the router retains hidden routes (Next.js App Router keeps several visited routes mounted for back navigation), multiplying every hidden region. Refines core card react-performance-evidence.
 
 **Apply when:** a diff adds force-mount, preserve-content, display:none toggles or hidden Activity around data-bearing UI, or a hidden route still asserts request demand or holds subscriptions.
 
 **Boundary notes:** Scroll position or open state that must survive a switch is state, not DOM: store it in the feature's state and restore it on mount.
 
-**Checks:** hidden pages mount nothing beyond visible regions, hold no subscriptions outside their sync owners and assert no request demand; reopening renders from cache without a loading flash; slow reopening is fixed through the query key or cache lifetime, not by pinning the tree.
+**Checks:** hidden regions have measured DOM and memory cost; effects release subscriptions or demand while hidden; unsent drafts and expensive canvases follow approved persistence behavior; reopening renders from cache without a loading flash; slow reopening is fixed through the query key or cache lifetime, not by pinning the tree.
 
 **Anti-pattern:** Keep every tab mounted with display:none so switching back is instant.
 
@@ -3543,7 +3894,7 @@ Render only the active tab; its data component reads the cached query while the 
 
 **Verification scenario:** Open and close a panel repeatedly and navigate across retained routes; assert DOM node and subscription counts return to baseline and reopening shows cached data without a loading surface.
 
-**Automatable check:** Lint force-mount props, preserve-content options and hidden Activity modes outside an allowlist.
+**Automatable check:** Lint force-mount and preserve-content usage outside a reviewed allowlist; verify effect cleanup and profile retained Activity boundaries.
 
 Pack: `web-app` (candidate). Topics: `frontend`, `performance`, `components`, `lifecycle`, `review`.
 

@@ -4,7 +4,7 @@ Start with fresh context, separate from the implementation. Read the accepted sc
 
 Never edit files, commit, push, post comments, change tickets or mutate application data. Do not implement changes in the candidate you independently review.
 
-Report only actionable findings with location, trigger, failure mechanism, evidence and repair direction, in the shape of `templates/findings.schema.json`; classify each main-path, money or deferred. Before classifying a finding main-path or money, write the ordered user actions that produce it on the normal journey, with no artificial timing, injected duplicate request or hand-fired call; without such a sequence it is deferred. Accept correct simple solutions even if another pattern is possible. Review repair deltas on the same base and reassess integrated changes when necessary. State what remains unverified.
+Report only actionable findings with location, trigger, failure mechanism, evidence and repair direction, in the shape of `templates/findings.schema.json`; classify each main-path, money or deferred. `main-path` includes primary user, operator, administrator and release journeys, plus a credible adversary path through an exposed trust boundary. Before classifying a finding main-path or money, write the ordered actor actions that produce it with no artificial timing, injected duplicate request or hand-fired internal call; without such a sequence it is deferred. Accept correct simple solutions even if another pattern is possible. Review repair deltas on the same base and reassess integrated changes when necessary. State what remains unverified.
 
 ## Hygiene gate
 

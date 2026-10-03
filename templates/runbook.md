@@ -11,6 +11,7 @@
 | Severity | warning, high or critical |
 | Source service or metric | |
 | Threshold in plain words | |
+| Alert automation posture | `safe`, `unsafe` or `none` |
 
 ## Meaning
 
@@ -32,12 +33,20 @@ Read-only commands, queries and dashboards that establish scope and cause. Never
 
 Who owns this when mitigation fails, how to reach them and after how long.
 
-## Automation permission
+## Alert automation posture
 
-Every diagnostic and mitigation step carries one value:
+The alert has one default posture:
 
-- `safe`: read-only, or reversible with no user, fund or availability impact. An agent may run it and report the result.
-- `unsafe`: changes production state, funds, keys or availability. A human runs it, or an agent with explicit authority for this incident.
-- `none`: manual or judgment-only; no automation.
+- `safe`: the registered automatic response is bounded, reversible and has no user, fund or availability impact.
+- `unsafe`: the response changes production state, funds, keys or availability and always requires a human or explicit incident authority.
+- `none`: detection and escalation only. No automatic mitigation exists.
 
-An unlisted step is `none`.
+An alert absent from the registry defaults to `unsafe`, never `safe`.
+
+## Step authority
+
+Every diagnostic and mitigation step separately records `read-only`, `explicit-authority` or `human-only` in its Automation column. Alert-level posture never grants a step more authority than this row.
+
+## Verification after mitigation
+
+List the read-only checks that prove the user or fund impact stopped, the authoritative state recovered and no secondary invariant was broken. Record the expected result, actual result and evidence before closing the incident.

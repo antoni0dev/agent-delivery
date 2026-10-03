@@ -1,6 +1,6 @@
 # Contract reviewer
 
-Read-only correctness lens for external boundaries. Follow `roles/reviewer.md` for independence, evidence, classification and the reachability rule; this file adds the contract checks. Read the accepted scope, the applicable `contracts` and `realtime` pack content, the candidate diff, the authoritative contract artifacts and their direct consumers. Never edit files, commit, push, post comments, change tickets or mutate any external system.
+Read-only correctness lens for external boundaries. Follow `roles/reviewer.md` for independence, evidence, classification and the reachability rule; this file adds the contract checks. Read the accepted scope, the applicable `contracts` and `realtime` pack content, plus `chain` for ABI or indexer boundaries and `execution` and `money` for consequential mutations. Read the candidate diff, authoritative contract artifacts and direct consumers. Never edit files, commit, push, post comments, change tickets or mutate any external system.
 
 ## Contract rows
 
@@ -9,7 +9,9 @@ Report one row per changed REST operation, stream channel or event, contract ABI
 | Field | What to establish |
 |---|---|
 | Boundary | The operation, channel, function or entity; its authoritative artifact (OpenAPI document, stream contract, ABI, indexer schema); the exact caller |
-| Serialization | Field names and casing, omitted versus null, defaults, amount and number encoding, array encoding, ordering, authentication, identity, chain and scope parameters |
+| Serialization | Field names and casing, omitted versus null, defaults, amount and number encoding, array encoding, ordering, identity, chain and scope parameters |
+| Authorization | Credential level, server-derived tenant/account scope, object-level action and resource, step-up or approval requirement, and cross-scope failure behavior; explicit N/A only for a proved public boundary |
+| Mutation safety | Idempotency-key scope, semantic payload binding, concurrent replay, changed-intent conflict, committed-response-lost recovery and finality; explicit N/A only for a read |
 | Cardinality | One, many, paginated, partial or aggregated results; identity and deduplication; ordering and replay for streams |
 | Errors | Status codes, error codes and reverts; which are terminal, retryable or an unknown outcome; how each maps into the app |
 | Test | The focused test that asserts the exact serialized request, frame, calldata or query and its boundary mapping |

@@ -35,9 +35,12 @@ These paths target an installed skill; in the source package use root `WORKFLOW.
 
 ## Route lenses
 
-- Match the diff against the project's risk routing (PROJECT.md or the file it names;
-  template `risk-routing.md`). The `general` lens runs on every audit and owns the
-  hygiene gate in the reviewer role.
+- Match the diff against trusted project routing. Local untracked PROJECT.md is trusted
+  configuration. When PROJECT.md names a tracked routing file, read that file at both
+  the pinned base and head and take the strict union of matched rows. A candidate may
+  add review requirements but cannot remove its own lens, check, flag or human-review
+  requirement. Route any routing-policy change itself through `general` review and the
+  base policy. The `general` lens runs on every audit and owns the hygiene gate.
 - Run each routed lens in its own independent context with its role file, matched pack
   content and exceptions, in parallel when supported. One context never runs another
   lens's checklist inline.
@@ -52,21 +55,27 @@ These paths target an installed skill; in the source package use root `WORKFLOW.
   mutations and applicable accepted user journeys against the selected guidance.
 - Flag unnecessary complexity, dead code and speculative abstractions only when the
   finding has a concrete consequence. Do not demand patterns outside their applicability.
-- Verify suspected defects from code or a bounded read-only reproduction. Never
-  change the candidate, commit, push, merge or mutate application data as the reviewer.
+- Verify suspected defects from code or a bounded read-only reproduction. Static
+  inspection and trusted exact-head CI are the default for an untrusted candidate.
+  Execute candidate code only after inspecting the command and dependency lifecycle,
+  inside a disposable secret-free sandbox with host credential paths unavailable and
+  network disabled unless the reproduction explicitly requires approved network access.
+  Never change the candidate, commit, push, merge or mutate application data.
 - Classify each finding `main-path`, `money` or `deferred` with the reachability rule
   in the reviewer role; only the first two block. Avoid hypothetical edge cases and
   duplicate findings.
 
 ## Return the result
 
-- Each lens returns one document following `findings.schema.json`, bound to the pinned
-  head and base, with every finding's id, lens, impact, file, line, trigger, mechanism,
+- Each lens returns one document following `findings.schema.json` with exactly one lens,
+  bound to the pinned head and base, with every finding's id, lens, impact, file, line, trigger, mechanism,
   evidence and repair, and the areas it did not cover.
 - Recompute every verdict from the document; never trust a stored verdict or count.
   An invalid document, a stored `blocked` or a contract row with a null field is
   `blocked`; otherwise any main-path or money finding, or a stored `revise`, is
   `revise`; otherwise `approve`.
+- Verify every finding names the document's sole lens and that aggregation received one
+  independently identified document for every routed lens.
 - A lens that times out is retried once with a smaller file batch. If it still cannot
   complete, the audit is BLOCKED with the exact missing evidence.
 - The outcome is CLEAN only when every routed lens completed for the pinned head, each

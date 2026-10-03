@@ -139,6 +139,34 @@ test('an unmodified managed install accepts a source update without deleting unr
   assert.equal(readFileSync(join(repo, '.agent-harness/WORKFLOW.md'), 'utf8'), 'Updated shared workflow');
   assert.equal(readFileSync(join(repo, '.agent-harness/personal-note.md'), 'utf8'), 'Keep me');
 });
+
+test('upgrade removes only unchanged managed files no longer supplied', t => {
+  const source = harnessCopy(t);
+  mkdirSync(join(source, 'skills/retired-skill'), { recursive: true });
+  writeFileSync(join(source, 'skills/retired-skill/SKILL.md'), '---\nname: retired-skill\ndescription: Temporary skill.\n---\n\nRead .agent-harness/WORKFLOW.md and .agent-harness/PROJECT.md.\n');
+  const repo = checkout(t);
+  assert.equal(node(join(source, 'scripts/install.mjs'), '--repo', repo, '--client', 'codex').status, 0);
+  const installed = join(repo, '.agents/skills/retired-skill/SKILL.md');
+  assert.ok(existsSync(installed));
+  rmSync(join(source, 'skills/retired-skill'), { recursive: true, force: true });
+  assert.equal(node(join(source, 'scripts/install.mjs'), '--repo', repo, '--client', 'codex').status, 0);
+  assert.equal(existsSync(installed), false);
+});
+
+test('upgrade preserves a locally edited managed file removed upstream', t => {
+  const source = harnessCopy(t);
+  mkdirSync(join(source, 'skills/retired-skill'), { recursive: true });
+  writeFileSync(join(source, 'skills/retired-skill/SKILL.md'), '---\nname: retired-skill\ndescription: Temporary skill.\n---\n\nRead .agent-harness/WORKFLOW.md and .agent-harness/PROJECT.md.\n');
+  const repo = checkout(t);
+  assert.equal(node(join(source, 'scripts/install.mjs'), '--repo', repo, '--client', 'codex').status, 0);
+  const installed = join(repo, '.agents/skills/retired-skill/SKILL.md');
+  writeFileSync(installed, 'Local skill edit\n');
+  rmSync(join(source, 'skills/retired-skill'), { recursive: true, force: true });
+  const result = node(join(source, 'scripts/install.mjs'), '--repo', repo, '--client', 'codex');
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Preserve local edit before removing/);
+  assert.equal(readFileSync(installed, 'utf8'), 'Local skill edit\n');
+});
 test('staged private project settings block installation before any managed writes', t => {
   const repo = checkout(t);
   mkdirSync(join(repo, '.agent-harness'));
@@ -240,6 +268,7 @@ test('check rejects a pack with a missing section, a duplicate id or a disallowe
     [{ 'state.json': mutated(pack => { pack.pack = 'state'; pack.cards[0].id = 'state-single-owner'; pack.cards[1].id = 'state-feature-flag-cleanup'; }) }, /card state-single-owner: duplicate card id/],
     [{ 'sample.json': mutated(pack => { pack.cards[0].topics = ['astrology', 'backend', 'review']; }) }, /topic "astrology" is not allowed/],
     [{ 'sample.json': mutated(pack => { pack.cards[0].content = pack.cards[0].content.replace('is tagged.', 'is tagged. Refines core card no-such-card.'); }) }, /card sample-release-notes-owner: references unknown card "no-such-card"/],
+    [{ 'sample.json': mutated(pack => { pack.cards[0].content = pack.cards[0].content.replace('is tagged.', 'is tagged. Refines core cards state-single-owner, tests-risk-observable-behavior, and no-such-card.'); }) }, /card sample-release-notes-owner: references unknown card "no-such-card"/],
   ];
   for (const [packs, expected] of cases) {
     const result = node(join(harnessCopy(t, packs), 'scripts/check.mjs'));

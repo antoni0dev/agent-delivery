@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
@@ -60,6 +60,13 @@ try {
     if (!Object.hasOwn(old.files, name)) fail(`Refusing unowned file: ${name}`);
     if (actual !== old.files[name]) fail(`Preserve local edit before upgrading: ${name}`);
   }
+  const stale = Object.entries(old.files).filter(([name]) => !files.has(name));
+  for (const [name, expected] of stale) {
+    const path = safePath(name);
+    if (!existsSync(path)) continue;
+    if (!lstatSync(path).isFile()) fail(`Not a regular stale managed file: ${name}`);
+    if (hash(readFileSync(path)) !== expected) fail(`Preserve local edit before removing: ${name}`);
+  }
   const projectPath = safePath('.agent-harness/PROJECT.md');
   safePath('.agent-harness/initiatives');
   let projectTemplate = readFileSync(join(source, 'templates/PROJECT.md'));
@@ -79,9 +86,13 @@ try {
   const exclusions = ['/.agent-harness/', ...skills.map(skill => `/${clients[client]}/skills/${skill}/`)];
   const priorExclude = existsSync(exclude) ? readFileSync(exclude, 'utf8') : '';
   const missing = exclusions.filter(line => !priorExclude.split(/\r?\n/).includes(line));
-  const next = { version: 1, files: { ...old.files } };
+  const next = { version: 1, files: {} };
   for (const [name, bytes] of files) next.files[name] = hash(bytes);
   if (!dryRun) {
+    for (const [name] of stale) {
+      const path = safePath(name);
+      if (existsSync(path)) unlinkSync(path);
+    }
     for (const [name, bytes] of files) {
       const path = safePath(name);
       mkdirSync(dirname(path), { recursive: true });

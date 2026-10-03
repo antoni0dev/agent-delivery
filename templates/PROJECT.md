@@ -28,7 +28,7 @@ Fill this file from the destination's existing instructions and approved decisio
 Every ticket gets a tier and two flags during planning, recorded in its initiative note. Risk routing checks the flags against the diff; a contradiction stops review until the owner corrects the flag and reruns what the corrected flag requires.
 
 - Tier scale and who assigns it (for example S, M, L):
-- `money` flag: the change touches amounts, prices, fees, balances, quotes, approvals, signing, addresses or submission. Money work is never the lowest tier.
+- `money` flag: the change touches amounts, prices, fees, balances, quotes, approvals, signing, addresses, chain or RPC configuration, or submission. Money work is never the lowest tier.
 - `ui` flag: the change alters user-visible behavior, layout or copy.
 
 | Tier or flag | Planning depth | Audit effort and lenses | E2E required |

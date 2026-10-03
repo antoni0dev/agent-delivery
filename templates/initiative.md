@@ -6,7 +6,7 @@
 - Workstream owner sessions, if useful:
 - Status and last checkpoint:
 - Approved scope, delegation/session creation/messaging authority and approval reference:
-- Selected card IDs, packs, content references, applicability and exceptions:
+- Selected card and recipe IDs, packs, content references, applicability and exceptions:
 
 ## Decision record
 

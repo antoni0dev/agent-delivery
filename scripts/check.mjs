@@ -101,7 +101,7 @@ for (const scanRoot of ['knowledge/packs', 'knowledge/README.md', 'patterns', 'r
 }
 if (leaks.length) throw new Error(`Leak scan failed (matched text is not shown):\n${leaks.join('\n')}`);
 
-const allowedTopics = new Set([...Object.keys(topics.topics), 'money', 'quotes', 'chain', 'signing', 'execution', 'contracts', 'release', 'security', 'web-app', 'frontend', 'backend']);
+const allowedTopics = new Set([...Object.keys(topics.topics), 'money', 'quotes', 'chain', 'signing', 'execution', 'contracts', 'release', 'security', 'web-app', 'perps', 'frontend', 'backend']);
 const sections = ['Apply when', 'Boundary notes', 'Checks', 'Anti-pattern', 'Why it fails', 'Bad example (illustrative)', 'Better example (illustrative)', 'Legitimate exceptions', 'Verification scenario', 'Automatable check'];
 const optionalSections = new Set(['Boundary notes', 'Automatable check']);
 const exampleSections = new Set(['Bad example (illustrative)', 'Better example (illustrative)']);
@@ -169,13 +169,13 @@ for (const file of packFiles) {
     sectionProblems(card.content).forEach(cardProblem);
   });
 }
-const referencePattern = /(?:(?:core|pack) cards?|\bsee) ([a-z0-9]+(?:-[a-z0-9]+)+(?:(?:, | and )[a-z0-9]+(?:-[a-z0-9]+)+)*)/gi;
+const referencePattern = /(?:(?:core|pack) cards?|\bsee) ([a-z0-9]+(?:-[a-z0-9]+)+(?:(?:, |, and | and )[a-z0-9]+(?:-[a-z0-9]+)+)*)/gi;
 for (const file of packFiles) {
   const pack = parseJson(readFileSync(join(packDirectory, file), 'utf8'));
   for (const card of Array.isArray(pack?.cards) ? pack.cards : []) {
     if (typeof card?.content !== 'string') continue;
     for (const [, list] of card.content.matchAll(referencePattern))
-      for (const id of list.split(/, | and /)) if (!cardIds.has(id)) packProblems.push(`knowledge/packs/${file}: card ${card.id}: references unknown card "${id}"`);
+      for (const id of list.split(/, and |, | and /)) if (!cardIds.has(id)) packProblems.push(`knowledge/packs/${file}: card ${card.id}: references unknown card "${id}"`);
   }
 }
 if (packProblems.length) throw new Error(`Knowledge pack validation failed:\n${packProblems.join('\n')}`);

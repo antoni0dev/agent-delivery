@@ -21,6 +21,15 @@ const audit = json('audit');
 const snapshot = json('source-snapshot');
 const coverage = json('coverage');
 const topics = json('topics');
+const catalog = JSON.parse(read('patterns/catalog.json'));
+const hasExactly = (value, keys) => value !== null && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).sort().join() === [...keys].sort().join();
+const slug = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const nonEmptyString = value => typeof value === 'string' && value.trim() !== '';
+const stringList = value => Array.isArray(value) && value.length > 0 && value.every(nonEmptyString);
+assert.ok(hasExactly(catalog, ['schemaVersion', 'patterns']), 'Pattern catalog fields must be exactly schemaVersion and patterns');
+assert.equal(catalog.schemaVersion, 1, 'Pattern catalog schemaVersion must be 1');
+assert.ok(Array.isArray(catalog.patterns) && catalog.patterns.length > 0, 'Pattern catalog needs a non-empty patterns array');
+const { patterns } = catalog;
 assert.equal(cards.length, 58, 'Preserve the complete 58-card knowledge release');
 assert.equal(new Set(cards.map(card => card.id)).size, cards.length);
 const digests = {
@@ -71,7 +80,7 @@ const walk = name => {
   return stat?.isFile() ? [name] : [];
 };
 const leaks = [];
-for (const scanRoot of ['knowledge/packs', 'knowledge/README.md', 'roles', 'skills', 'templates', 'docs', 'scripts', 'test', '.github', 'WORKFLOW.md', 'README.md', 'AGENTS.md']) {
+for (const scanRoot of ['knowledge/packs', 'knowledge/README.md', 'patterns', 'roles', 'skills', 'templates', 'docs', 'scripts', 'test', '.github', 'WORKFLOW.md', 'README.md', 'AGENTS.md']) {
   for (const name of walk(scanRoot)) {
     const file = shown(name, `${scanRoot}/<redacted path>`);
     const report = (location, text) => leaksIn(text).forEach(category => leaks.push(`${category}: ${file}${location}`));
@@ -96,9 +105,6 @@ const allowedTopics = new Set([...Object.keys(topics.topics), 'money', 'quotes',
 const sections = ['Apply when', 'Boundary notes', 'Checks', 'Anti-pattern', 'Why it fails', 'Bad example (illustrative)', 'Better example (illustrative)', 'Legitimate exceptions', 'Verification scenario', 'Automatable check'];
 const optionalSections = new Set(['Boundary notes', 'Automatable check']);
 const exampleSections = new Set(['Bad example (illustrative)', 'Better example (illustrative)']);
-const kebab = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const hasExactly = (value, keys) => value !== null && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).sort().join() === [...keys].sort().join();
-const nonEmpty = value => typeof value === 'string' && value.trim() !== '';
 const sectionProblems = content => {
   const [title, ...paragraphs] = content.split(/\n\s*\n/);
   const found = [];
@@ -140,8 +146,8 @@ for (const file of packFiles) {
     continue;
   }
   if (pack.schemaVersion !== 1) problem('schemaVersion must be 1');
-  if (pack.pack !== name || !kebab.test(name)) problem('pack must be a kebab-case name equal to the file name');
-  if (!nonEmpty(pack.title) || !nonEmpty(pack.summary)) problem('title and summary must be non-empty strings');
+  if (pack.pack !== name || !slug.test(name)) problem('pack must be a kebab-case name equal to the file name');
+  if (!nonEmptyString(pack.title) || !nonEmptyString(pack.summary)) problem('title and summary must be non-empty strings');
   if (!['candidate', 'approved'].includes(pack.status)) problem('status must be candidate or approved');
   if (!Array.isArray(pack.cards) || !pack.cards.length) {
     problem('cards must be a non-empty array');
@@ -150,7 +156,7 @@ for (const file of packFiles) {
   pack.cards.forEach((card, index) => {
     const cardProblem = message => problem(`card ${typeof card?.id === 'string' ? card.id : `#${index + 1}`}: ${message}`);
     if (!hasExactly(card, ['id', 'topics', 'content'])) return cardProblem('fields must be exactly id, topics and content');
-    if (typeof card.id !== 'string' || !kebab.test(card.id) || !card.id.startsWith(`${name}-`) || card.id.length > 60) cardProblem(`id must be kebab-case, start with "${name}-" and have at most 60 characters`);
+    if (typeof card.id !== 'string' || !slug.test(card.id) || !card.id.startsWith(`${name}-`) || card.id.length > 60) cardProblem(`id must be kebab-case, start with "${name}-" and have at most 60 characters`);
     else if (cardIds.has(card.id)) cardProblem('duplicate card id across core cards and packs');
     else cardIds.add(card.id);
     const cardTopics = Array.isArray(card.topics) ? card.topics : [];
@@ -176,6 +182,29 @@ if (packProblems.length) throw new Error(`Knowledge pack validation failed:\n${p
 
 execFileSync(process.execPath, [fileURLToPath(new URL('scripts/render-knowledge-guide.mjs', root)), '--check'], { stdio: 'inherit' });
 for (const name of ['WORKFLOW.md', 'templates/PROJECT.md', 'templates/initiative.md']) assert.ok(read(name).trim(), `Missing ${name}`);
+assert.equal(new Set(patterns.map(pattern => pattern.id)).size, patterns.length, 'Pattern IDs must be unique');
+const recipeFiles = readdirSync(new URL('patterns/recipes/', root)).filter(name => name.endsWith('.md')).sort();
+assert.deepEqual(patterns.map(pattern => pattern.recipe.replace('recipes/', '')).sort(), recipeFiles, 'Every recipe must have exactly one catalog entry');
+const portablePatternText = [read('patterns/README.md'), read('patterns/inventory.md')];
+for (const pattern of patterns) {
+  assert.ok(hasExactly(pattern, ['id', 'title', 'kind', 'topics', 'recipe', 'relatedCards']), 'Pattern fields must be exactly id, title, kind, topics, recipe and relatedCards');
+  assert.ok(nonEmptyString(pattern.id) && slug.test(pattern.id), `Invalid pattern id: ${pattern.id}`);
+  assert.ok(nonEmptyString(pattern.title), `Pattern needs a title: ${pattern.id}`);
+  assert.ok(stringList(pattern.kind) && pattern.kind.every(value => slug.test(value)), `Pattern needs slug kinds: ${pattern.id}`);
+  assert.ok(stringList(pattern.topics) && pattern.topics.every(value => slug.test(value)), `Pattern needs slug topics: ${pattern.id}`);
+  assert.ok(stringList(pattern.relatedCards) && pattern.relatedCards.every(value => slug.test(value)), `Pattern needs related card ids: ${pattern.id}`);
+  assert.ok(nonEmptyString(pattern.recipe), `Pattern needs a recipe: ${pattern.id}`);
+  assert.ok(pattern.recipe.startsWith('recipes/') && !pattern.recipe.includes('..'), `Unsafe recipe path: ${pattern.recipe}`);
+  const recipe = read(`patterns/${pattern.recipe}`);
+  portablePatternText.push(recipe);
+  assert.ok(recipe.startsWith(`# ${pattern.title}\n`), `Recipe title mismatch: ${pattern.id}`);
+  const relatedLine = /^Related cards?: (.+)$/m.exec(recipe)?.[1] ?? '';
+  const recipeRelatedCards = [...relatedLine.matchAll(/`([^`]+)`/g)].map(match => match[1]).sort();
+  assert.deepEqual(recipeRelatedCards, [...pattern.relatedCards].sort(), `Related cards drifted in ${pattern.id}`);
+  for (const relatedCardId of pattern.relatedCards) assert.ok(cardIds.has(relatedCardId), `Unknown related card ${relatedCardId} in ${pattern.id}`);
+}
+assert.doesNotMatch(portablePatternText.join('\n'), /\/Users\/|https?:\/\/|BEGIN [A-Z ]*PRIVATE KEY/, 'Pattern cookbook contains a non-portable path, URL or key marker');
+
 const skillDirectory = join(base, 'skills');
 const skills = readdirSync(skillDirectory).filter(name => !lstatSync(join(skillDirectory, name)).isFile()).sort();
 assert.ok(skills.length, 'skills/ must contain at least one skill directory');
@@ -192,4 +221,4 @@ for (const name of skills) {
   assert.ok(content.includes('.agent-harness/WORKFLOW.md'), `${name} must load shared workflow`);
   assert.ok(content.includes('.agent-harness/PROJECT.md'), `${name} must load project contract`);
 }
-process.stdout.write(`Knowledge release, independent audit bindings, ${packFiles.length} knowledge pack(s), leak scan (${denyTerms.length ? `${denyTerms.length} private deny-list terms` : 'no private deny list found; built-in patterns only'}), generated guides and ${skills.length} shared skill entrypoints verified.\n`);
+process.stdout.write(`Knowledge release, pattern cookbook, independent audit bindings, ${packFiles.length} knowledge pack(s), leak scan (${denyTerms.length ? `${denyTerms.length} private deny-list terms` : 'no private deny list found; built-in patterns only'}), generated guides and ${skills.length} shared skill entrypoints verified.\n`);

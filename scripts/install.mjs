@@ -48,7 +48,7 @@ try {
       for (const entry of readdirSync(from)) add(join(from, entry), `${to}/${entry}`);
     } else files.set(to, readFileSync(from));
   };
-  for (const name of ['WORKFLOW.md', 'roles', 'knowledge', 'scripts/select.mjs', 'templates', 'docs/knowledge.md', 'docs/readiness.md']) add(join(source, name), `.agent-harness/${name}`);
+  for (const name of ['WORKFLOW.md', 'roles', 'knowledge', 'patterns', 'scripts/select.mjs', 'templates', 'docs/knowledge.md', 'docs/readiness.md']) add(join(source, name), `.agent-harness/${name}`);
   const skills = readdirSync(join(source, 'skills')).filter(skill => !lstatSync(join(source, 'skills', skill)).isFile()).sort();
   for (const skill of skills) add(join(source, 'skills', skill), `${clients[client]}/skills/${skill}`);
   // Validate every planned write before modifying the checkout.

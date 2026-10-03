@@ -21,7 +21,7 @@ Copy the following generic files without replacing existing custom files:
 
 | Source in this harness | Destination in your repository |
 | --- | --- |
-| `WORKFLOW.md`, `roles/`, `knowledge/` | Same names under `.agent-harness/` |
+| `WORKFLOW.md`, `roles/`, `knowledge/`, `patterns/` | Same names under `.agent-harness/` |
 | `docs/knowledge.md`, `docs/readiness.md` | Same names under `.agent-harness/docs/` |
 | `templates/` | `.agent-harness/templates/` |
 | `templates/PROJECT.md` | `.agent-harness/PROJECT.md`, only if absent |
@@ -33,7 +33,7 @@ A manual copy does not create an installer ownership manifest. Update it by revi
 
 ## Project configuration and use
 
-Installation places the workflow, roles, knowledge (including domain packs) and templates in `.agent-harness/` and every skill under the harness `skills/` directory in the selected client's repository skill directory. Preserve existing team instructions and unrelated settings. Do not overwrite local project decisions on upgrades; review any managed-file conflicts the installer reports.
+Installation places the workflow, roles, knowledge (including domain packs), pattern cookbook and templates in `.agent-harness/` and every skill under the harness `skills/` directory in the selected client's repository skill directory. Preserve existing team instructions and unrelated settings. Do not overwrite local project decisions on upgrades; review any managed-file conflicts the installer reports.
 
 Fill `.agent-harness/PROJECT.md` from this repository's sources: tracker scope, branch permissions, models, dependency setup, checks, QA environment and existing ownership. Reference credentials through the destination's normal tools; never copy them into the harness or portable upstream repository. Decide with the team which generic files may be committed; keep company-private configuration and execution notes local where required.
 
@@ -53,6 +53,9 @@ node .agent-harness/scripts/select.mjs --list
 node .agent-harness/scripts/select.mjs --topic state
 node .agent-harness/scripts/select.mjs --pack NAME
 node .agent-harness/scripts/select.mjs --card state-single-owner
+node .agent-harness/scripts/select.mjs --list-patterns
+node .agent-harness/scripts/select.mjs --pattern-topic query
+node .agent-harness/scripts/select.mjs --pattern explicit-query-state
 ```
 
 Pack cards are labeled with their pack and status; [knowledge](knowledge.md) explains candidate and approved packs. The manager shares selected full card content and exceptions with workers and reviewers. Do not treat a topic match or read receipt as proof of engineering quality.
@@ -75,6 +78,7 @@ The installer copies every skill directory under the harness `skills/`; each `SK
 
 - `engineering-manager`: initiative ownership, planning, delegation and integration.
 - `engineering-knowledge`: selecting core and pack cards for planning, implementation and review.
+- `engineering-patterns`: selecting concrete TypeScript and React implementation recipes with their related decision cards.
 - `verify-task`: source triangulation before non-trivial implementation.
 - `shape-linear-ticket`: master tickets with acceptance criteria and open questions.
 - `pr-audit`: independent read-only review, precise findings and repair handoff.

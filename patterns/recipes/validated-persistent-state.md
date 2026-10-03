@@ -24,7 +24,7 @@ The adapter owns platform events, serialization transport, and snapshot caching.
 ## Hook factory
 
 ```ts
-import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 
 type PersistentStateInput<Key extends string, Value> = {
   key: Key
@@ -40,20 +40,18 @@ export function createPersistentStateHook<Key extends string>(
     initialValue,
     codec,
   }: PersistentStateInput<Key, Value>) {
-    const mountedKey = useRef(key)
-    const initialEntry = useRef<{ value: Value } | null>(null)
+    const [binding] = useState(() => ({
+      key,
+      initial: initialValue(),
+    }))
 
-    if (mountedKey.current !== key) {
+    if (binding.key !== key) {
       throw new Error(
         'Persistent state keys are immutable for one hook instance; remount for a new key'
       )
     }
 
-    if (initialEntry.current === null) {
-      initialEntry.current = { value: initialValue() }
-    }
-
-    const initial = initialEntry.current.value
+    const initial = binding.initial
     const subscribe = useCallback(
       (listener: () => void) => storage.subscribe(key, listener),
       [key, storage]

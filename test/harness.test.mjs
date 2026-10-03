@@ -14,6 +14,8 @@ function harnessCopy(t, packs = { 'sample.json': fixturePack() }) {
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   for (const name of ['knowledge', 'scripts', 'roles', 'skills', 'templates', 'docs', 'WORKFLOW.md', 'README.md'])
     cpSync(join(root, name), join(directory, name), { recursive: true });
+  // Replace shipped packs with the fixtures so assertions do not depend on real pack content.
+  rmSync(join(directory, 'knowledge/packs'), { recursive: true, force: true });
   mkdirSync(join(directory, 'knowledge/packs'), { recursive: true });
   for (const [file, pack] of Object.entries(packs)) writeFileSync(join(directory, 'knowledge/packs', file), JSON.stringify(pack, null, 2) + '\n');
   return directory;

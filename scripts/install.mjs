@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
@@ -48,9 +48,9 @@ try {
       for (const entry of readdirSync(from)) add(join(from, entry), `${to}/${entry}`);
     } else files.set(to, readFileSync(from));
   };
-  for (const name of ['WORKFLOW.md', 'roles', 'knowledge', 'patterns', 'scripts/select.mjs', 'templates/initiative.md', 'docs/knowledge.md', 'docs/readiness.md']) add(join(source, name), `.agent-harness/${name}`);
-  const skills = ['engineering-manager', 'engineering-knowledge', 'engineering-patterns', 'shape-linear-ticket', 'pr-audit', 'project-qa', 'quality-gates'];
-  for (const skill of skills) add(join(source, `skills/${skill}/SKILL.md`), `${clients[client]}/skills/${skill}/SKILL.md`);
+  for (const name of ['WORKFLOW.md', 'roles', 'knowledge', 'patterns', 'scripts/select.mjs', 'templates', 'docs/knowledge.md', 'docs/readiness.md']) add(join(source, name), `.agent-harness/${name}`);
+  const skills = readdirSync(join(source, 'skills')).filter(skill => !lstatSync(join(source, 'skills', skill)).isFile()).sort();
+  for (const skill of skills) add(join(source, 'skills', skill), `${clients[client]}/skills/${skill}`);
   // Validate every planned write before modifying the checkout.
   for (const [name, bytes] of files) {
     const path = safePath(name);
@@ -59,6 +59,13 @@ try {
     const actual = hash(readFileSync(path));
     if (!Object.hasOwn(old.files, name)) fail(`Refusing unowned file: ${name}`);
     if (actual !== old.files[name]) fail(`Preserve local edit before upgrading: ${name}`);
+  }
+  const stale = Object.entries(old.files).filter(([name]) => !files.has(name));
+  for (const [name, expected] of stale) {
+    const path = safePath(name);
+    if (!existsSync(path)) continue;
+    if (!lstatSync(path).isFile()) fail(`Not a regular stale managed file: ${name}`);
+    if (hash(readFileSync(path)) !== expected) fail(`Preserve local edit before removing: ${name}`);
   }
   const projectPath = safePath('.agent-harness/PROJECT.md');
   safePath('.agent-harness/initiatives');
@@ -79,9 +86,13 @@ try {
   const exclusions = ['/.agent-harness/', ...skills.map(skill => `/${clients[client]}/skills/${skill}/`)];
   const priorExclude = existsSync(exclude) ? readFileSync(exclude, 'utf8') : '';
   const missing = exclusions.filter(line => !priorExclude.split(/\r?\n/).includes(line));
-  const next = { version: 1, files: { ...old.files } };
+  const next = { version: 1, files: {} };
   for (const [name, bytes] of files) next.files[name] = hash(bytes);
   if (!dryRun) {
+    for (const [name] of stale) {
+      const path = safePath(name);
+      if (existsSync(path)) unlinkSync(path);
+    }
     for (const [name, bytes] of files) {
       const path = safePath(name);
       mkdirSync(dirname(path), { recursive: true });
@@ -95,7 +106,7 @@ try {
       writeFileSync(exclude, priorExclude + (priorExclude.endsWith('\n') || !priorExclude ? '' : '\n') + missing.join('\n') + '\n');
     }
   }
-  process.stdout.write(`${dryRun ? 'Would install' : 'Installed'} ${files.size} managed files for ${client}. PROJECT.md and initiatives are preserved. Installation is not readiness: complete .agent-harness/docs/readiness.md before delivery.\n`);
+  process.stdout.write(`${dryRun ? 'Would install' : 'Installed'} ${files.size} managed files for ${client}. PROJECT.md and initiatives are preserved; after an upgrade, compare PROJECT.md with .agent-harness/templates/PROJECT.md for new sections. Installation is not readiness: complete .agent-harness/docs/readiness.md before delivery.\n`);
 } catch (error) {
   process.stderr.write(`${error.message}\n`);
   process.exitCode = 1;

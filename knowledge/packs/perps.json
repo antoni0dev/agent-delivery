@@ -1,0 +1,119 @@
+{
+  "schemaVersion": 1,
+  "pack": "perps",
+  "title": "Perpetual exchange contracts and risk",
+  "status": "candidate",
+  "summary": "Perpetual order intent, market increments, position accounting, risk authority and risk-reducing execution.",
+  "cards": [
+    {
+      "id": "perps-order-intent-binding",
+      "topics": [
+        "frontend",
+        "money",
+        "execution",
+        "review",
+        "perps"
+      ],
+      "content": "## Bind every perpetual order field to confirmed intent\n\nA perpetual order is one intent containing market, account, side, signed size, price or trigger, order type, time in force, reduce-only, post-only, leverage, margin mode, position mode, client order identity and expiry. The review screen and the submitted or signed payload resolve from the same validated command. A quote, preview or fee refresh may update derived display values, but it cannot change any intent field after confirmation without a new confirmation.\n\n**Apply when:** adding or changing market, limit, stop, take-profit, close, reduce or conditional order submission.\n\n**Boundary notes:** Defaults for time in force, leverage, margin mode and close behavior are product decisions. Backend support for a field does not authorize a client default.\n\n**Checks:** every displayed field maps to one payload field; omitted versus explicit false is preserved; account and market scope come from the current session; client order identity is stable for the attempt; expiry and trigger basis are explicit; unknown order variants fail at the boundary.\n\n**Anti-pattern:** Build the payload from mutable form stores after the user confirmed a separate summary object.\n\n**Why it fails:** A late state update can submit a different side, size, leverage or reduce-only value, turning a close into new exposure or changing liquidation risk.\n\n**Bad example (illustrative):** confirm(summary); later submit({ ...formStore, clientOrderId: newId() })\n\n**Better example (illustrative):** command = validateAndFreeze(form); confirm(command); submit(command, stableOperationId)\n\n**Legitimate exceptions:** A server-generated field may be absent from the client command when the contract proves it cannot alter economic intent.\n\n**Verification scenario:** Change every field after the confirmation view mounts, switch account and market, and deliver a late preview; assert the payload either remains exactly the confirmed command or requires reconfirmation."
+    },
+    {
+      "id": "perps-market-quantization",
+      "topics": [
+        "frontend",
+        "money",
+        "types",
+        "implementation",
+        "perps"
+      ],
+      "content": "## Quantize price and size from market metadata\n\nValidate price and size with the market's versioned tick size, lot step, minimum size, minimum notional and price bands in exact decimal or integer units. Asset decimals only bound representation; they do not define valid orders. Reject off-increment input by default. If product approves quantization, name the direction for each order type and show the quantized value before confirmation. The submitted value is the confirmed quantized value.\n\n**Apply when:** building price or size inputs, Max controls, order builders, market metadata mappers or validation errors.\n\n**Boundary notes:** Rounding direction can change execution likelihood and risk. It is a product and venue-contract decision, not a generic formatter choice.\n\n**Checks:** metadata identity and version match the selected market; no float conversion reaches validation; price and size increments are checked independently; minimum notional uses the contract's price basis; changed metadata invalidates the draft or revalidates visibly; backend rejection maps to a stable validation code.\n\n**Anti-pattern:** Accept any value within base-asset decimals and silently round it while constructing the request.\n\n**Why it fails:** Ordinary orders are rejected, or a silently rounded price or size differs from what the trader reviewed and can increase exposure.\n\n**Bad example (illustrative):** size = floorToDecimals(raw, baseDecimals); submit(size)\n\n**Better example (illustrative):** parsed = exact(raw); validateStep(parsed, lotStep); confirm(parsed); submit(parsed)\n\n**Legitimate exceptions:** A venue that accepts arbitrary precision and quantizes server-side still needs the server's returned normalized value shown before a consequential follow-up.\n\n**Verification scenario:** Test values on, below and between ticks and lot steps, minimum size and notional boundaries, stale metadata and a market switch; assert exact rejection or approved visible quantization."
+    },
+    {
+      "id": "perps-reduce-only-never-increases-risk",
+      "topics": [
+        "frontend",
+        "money",
+        "execution",
+        "review",
+        "perps"
+      ],
+      "content": "## Make reduce-only incapable of increasing exposure\n\nReduce-only and close actions are enforced by the execution authority, not only by the UI. They bind account, market, position side and maximum reducible quantity, and can reduce to zero but never open, add to or flip a position. Concurrent fills and position changes are rechecked atomically at acceptance. A client may cap a draft to the latest visible position for usability, but the server remains the invariant owner.\n\n**Apply when:** implementing close, reduce-only, stop-loss, take-profit, liquidation protection or order amendment.\n\n**Boundary notes:** Hedge mode may hold independent long and short positions. The command must identify the exact position side rather than infer it from net exposure.\n\n**Checks:** reduce-only survives every mapper and adapter; partial fills decrement remaining reducible quantity; a position closed elsewhere makes the remainder cancel or reject; an opposite-side change cannot turn the order into opening exposure; cancel and close remain available during read-stream degradation under the approved action policy.\n\n**Anti-pattern:** Hide the buy or sell button based on current position and trust the submitted side to remain reducing.\n\n**Why it fails:** Stale state or a concurrent fill can make the same side increase or flip exposure, exactly when the user intended to lower risk.\n\n**Bad example (illustrative):** if (position.size > 0) submitSell(size) without reduceOnly\n\n**Better example (illustrative):** submit({ positionId, side, size, reduceOnly: true }); authority rechecks reducible size atomically\n\n**Legitimate exceptions:** A venue without reduce-only support needs an explicit product decision and cannot present the action as guaranteed risk reduction.\n\n**Verification scenario:** Race a close with another fill, close the position from another device, use hedge mode and over-size the close; verify no execution increases or flips exposure."
+    },
+    {
+      "id": "perps-partial-fill-order-state",
+      "topics": [
+        "frontend",
+        "realtime",
+        "execution",
+        "implementation",
+        "perps"
+      ],
+      "content": "## Derive order state from versioned partial fills\n\nAn order read model carries original quantity, cumulative filled quantity, remaining quantity, average fill price, fee totals and a version or sequence from the authoritative venue or engine. Apply snapshots, fills, amendments, cancels and terminal events through one pure reducer. Duplicate or older events are idempotent, cumulative fields never move backward, and terminal state does not discard late authoritative fills that occurred before cancellation took effect.\n\n**Apply when:** merging REST orders with live fills, showing progress, calculating remaining size, or reconciling cancel and replace.\n\n**Boundary notes:** Event time is display metadata unless the contract declares it as the order source. Use venue sequence, row version or authoritative cumulative totals for ordering.\n\n**Checks:** fill identity deduplicates; cumulative quantity and fees use exact units; average price is recomputed or taken from one authority; cancel-requested is distinct from cancelled; partially-filled terminal variants remain representable; account and market identity fence every event.\n\n**Anti-pattern:** Treat the first fill as filled, or let a cancel acknowledgement erase a fill that arrives later.\n\n**Why it fails:** Traders see wrong remaining exposure, PnL and fees, and may submit another order to compensate for quantity that already filled.\n\n**Bad example (illustrative):** onFill: order.status = 'filled'; onCancel: order.filled = 0\n\n**Better example (illustrative):** reduceOrder(current, versionedEvent) preserves cumulative fills and derives status from filled versus total\n\n**Legitimate exceptions:** A complete versioned order row can replace the model atomically, while still rejecting older versions.\n\n**Verification scenario:** Deliver duplicate fills, fill then cancel out of order, partial fill then replace, and a late pre-cancel fill; assert exact cumulative quantity, fees, remaining size and terminal state."
+    },
+    {
+      "id": "perps-mark-index-oracle-authority",
+      "topics": [
+        "backend",
+        "money",
+        "data",
+        "planning",
+        "perps"
+      ],
+      "content": "## Name the authority for index and mark prices\n\nDocument the source and formula for index price, mark price and any oracle inputs, including venue set, weights, outlier rules, update cadence, staleness threshold, fallback and version. The mark used for margin, unrealized PnL and liquidation is an authoritative risk value, not a convenient ticker. Clients display its provenance and freshness but do not reconstruct a competing risk mark from public prices.\n\n**Apply when:** adding a market, oracle, price stream, PnL display, margin check, liquidation calculation or fallback provider.\n\n**Boundary notes:** Product may show a separate last trade or indicative price. Labels must distinguish it from the risk mark.\n\n**Checks:** every price has unit, timestamp, version and source kind; stale or invalid inputs produce a typed unavailable or degraded state; fallbacks cannot silently loosen risk; the same authoritative mark feeds margin, liquidation and account risk; historical corrections have an audit path.\n\n**Anti-pattern:** Fall back from a missing mark to last trade price or a client-computed average without changing state or label.\n\n**Why it fails:** Margin and liquidation diverge between systems, users see impossible PnL, and a manipulated or stale venue price can change collateral requirements.\n\n**Bad example (illustrative):** mark = backendMark ?? average(publicTickers)\n\n**Better example (illustrative):** risk = resolveMark(authoritativeInputs); if unavailable, enter the approved degraded-risk state\n\n**Legitimate exceptions:** A clearly labelled chart overlay may use a client-derived comparison price that never reaches risk or execution.\n\n**Verification scenario:** Stale one source, inject an outlier, remove quorum and switch fallback versions; assert the documented mark or explicit degraded state appears consistently in margin, PnL and liquidation."
+    },
+    {
+      "id": "perps-margin-liquidation-rounding",
+      "topics": [
+        "backend",
+        "money",
+        "data",
+        "implementation",
+        "perps"
+      ],
+      "content": "## Calculate margin and liquidation conservatively\n\nInitial margin, maintenance margin, available margin, liquidation price and risk-tier transitions use one authoritative exact arithmetic library with explicit units and rounding. Liability and required margin round toward more risk; available collateral rounds toward less available value. The calculation names cross versus isolated scope, position side, contract multiplier, fee reserve, funding liability and tier schedule. Clients consume the authoritative result and may explain inputs, but do not invent a second liquidation formula.\n\n**Apply when:** changing leverage, collateral, margin modes, risk tiers, liquidation displays or order admission.\n\n**Boundary notes:** Formulas and rounding are venue and product contracts. Record versioned examples before implementation.\n\n**Checks:** zero, negative and overflow cases are typed; every tier boundary has tests on both sides; cross-margin aggregation names included assets and haircuts; isolated calculations cannot read unrelated collateral; fee and funding reserves are included once; display precision cannot flow back into admission.\n\n**Anti-pattern:** Compute liquidation price in the browser from rounded position and balance labels.\n\n**Why it fails:** The displayed threshold disagrees with the engine, a one-unit rounding error can admit excess risk, and cross or isolated funds can be counted in the wrong scope.\n\n**Bad example (illustrative):** liq = Number(entry) - Number(balance) / Number(size)\n\n**Better example (illustrative):** result = riskEngine.calculate(versionedExactInputs); client renders result with formula version\n\n**Legitimate exceptions:** Educational estimates may be client-computed only when labelled approximate and never used for admission or alerts.\n\n**Verification scenario:** Test long and short, cross and isolated, every tier edge, tiny collateral, funding owed and credited, fee reserve, overflow and rounding boundaries against authoritative vectors."
+    },
+    {
+      "id": "perps-funding-accrual-settlement",
+      "topics": [
+        "backend",
+        "money",
+        "data",
+        "implementation",
+        "perps"
+      ],
+      "content": "## Accrue and settle funding from one ledger\n\nFunding rate, interval, index and settlement use one versioned ledger authority. Accrual is exact over the position quantity and documented price basis, with sign conventions tested for long and short. Position changes split accrual at the authoritative event boundary so closed quantity is not charged for a later interval. Replays and corrections are idempotent ledger entries, never destructive overwrites, and account equity and realized PnL consume the same settled facts.\n\n**Apply when:** implementing funding rates, countdowns, position history, account equity, settlement jobs or corrections.\n\n**Boundary notes:** A displayed next funding estimate is not settled funding. Label estimates and keep them out of authoritative PnL.\n\n**Checks:** interval identity is unique; late or duplicate jobs do not double charge; long and short signs are symmetric; partial close and position flip split accrual correctly; rate and price basis carry units and versions; corrections preserve an audit trail; settlement failure leaves a resumable state.\n\n**Anti-pattern:** Recompute historical funding from the latest position size or overwrite the previous total when a job retries.\n\n**Why it fails:** Users are charged twice or for exposure they no longer held, equity diverges from the ledger, and a correction cannot be audited.\n\n**Bad example (illustrative):** account.funding += currentSize * rate whenever the timer fires\n\n**Better example (illustrative):** appendFundingOnce(account, positionVersion, intervalId, exactAccrual)\n\n**Legitimate exceptions:** A fully external venue may provide authoritative funding ledger entries; ingest and reconcile them rather than recreating the formula.\n\n**Verification scenario:** Retry one interval, partially close before settlement, flip side, correct a published rate and restart the job; verify one auditable entry per segment and exact equity reconciliation."
+    },
+    {
+      "id": "perps-position-mode-margin-scope",
+      "topics": [
+        "frontend",
+        "money",
+        "state",
+        "review",
+        "perps"
+      ],
+      "content": "## Bind position and margin mode to every action\n\nOne-way versus hedge position mode and cross versus isolated margin mode are explicit account or market state with versioned transition rules. Every order, close, collateral change and leverage update binds the expected mode and exact position identity. A mode change is rejected while incompatible orders or positions exist unless the product contract defines an atomic migration. Account switches clear every draft and cached risk projection before another action becomes available.\n\n**Apply when:** adding hedge mode, isolated margin, leverage editing, collateral transfer or position selection.\n\n**Boundary notes:** Which transitions are allowed and whether open orders block them are product and risk decisions.\n\n**Checks:** long and short position ids remain distinct in hedge mode; a close identifies the intended side; isolated collateral cannot leak into cross available margin; mode version conflicts return a stable error and refresh; drafts reset on account or mode change; URLs and local storage do not become authority for mode.\n\n**Anti-pattern:** Infer mode from the number of positions, or submit a close by market symbol alone.\n\n**Why it fails:** The wrong side closes, collateral is counted twice, or a stale draft created under one mode opens exposure under another.\n\n**Bad example (illustrative):** close({ market, size }) and let the server infer which position\n\n**Better example (illustrative):** close({ accountId, positionId, side, size, modeVersion, reduceOnly: true })\n\n**Legitimate exceptions:** A venue supporting only one immutable mode can omit the field after the boundary adapter proves that invariant.\n\n**Verification scenario:** Switch account, change cross to isolated, enable hedge mode with both sides open and submit from a stale draft; verify reset or version conflict and no action reaches the wrong position."
+    },
+    {
+      "id": "perps-cancel-replace-unknown-outcome",
+      "topics": [
+        "backend",
+        "money",
+        "execution",
+        "implementation",
+        "perps"
+      ],
+      "content": "## Treat cancel and replace as consequential mutations\n\nCancel and replace use stable operation identities and authoritative order versions. A lost response is unknown: reconcile the original order and operation before another cancel or replacement. Replace is not assumed atomic unless the venue contract proves it. Where cancel then create are separate, expose the interval and never report the new order active before its acknowledgement. A replacement cannot bypass reduce-only, margin or price-band validation.\n\n**Apply when:** implementing cancel, amend, replace, batch cancel, reconnect recovery or retry behavior.\n\n**Boundary notes:** Risk-reducing cancel should remain reachable during read-stream degradation through the authoritative mutation path, but product policy owns the user message and fallback.\n\n**Checks:** same key plus same intent replays; changed replacement intent conflicts; order version or expected state prevents stale amendment; partial fills between request and acceptance are handled; unknown outcome does not mint a new key; batch results are per order and terminally reconcilable.\n\n**Anti-pattern:** On cancel timeout, submit a replacement with a fresh identity and assume the old order disappeared.\n\n**Why it fails:** Both orders can remain live, doubling exposure, or a fill during the gap makes the replacement exceed the intended remaining size.\n\n**Bad example (illustrative):** catch cancelTimeout { place(replacement, newKey()) }\n\n**Better example (illustrative):** markUnknown(cancelOp); lookup(orderId); replay same key only under the documented contract\n\n**Legitimate exceptions:** An exchange-native atomic amend with payload-bound idempotency can be one operation, but its exact semantics require contract tests.\n\n**Verification scenario:** Lose cancel acknowledgement, partially fill during cancel, reject a stale order version and replay a replace response; verify no duplicate live order and correct remaining exposure."
+    },
+    {
+      "id": "perps-risk-reducing-actions-availability",
+      "topics": [
+        "frontend",
+        "money",
+        "realtime",
+        "planning",
+        "perps"
+      ],
+      "content": "## Keep risk-reducing actions available under degraded reads\n\nDefine freshness requirements per action. Opening or increasing exposure may require fresh balances, positions and risk parameters. Classify cancellation by the order's economic intent: cancelling an exposure-increasing entry may reduce risk, while cancelling a protective reduce-only stop or take-profit can increase it. Closing, reducing and lowering leverage should remain reachable through the authoritative mutation contract when live reads degrade unless a recorded money policy proves stale state makes that specific action unsafe. Stream health informs the decision and messaging; it is not blanket authorization.\n\n**Apply when:** gating controls on socket state, reconnect, auth refresh, stale queries or degraded backend health.\n\n**Boundary notes:** Exact allowed actions and copy are product and risk decisions. The default safety question is whether blocking traps the user in exposure.\n\n**Checks:** every action has a freshness policy; cancellation is classified from the target order's side, reduce-only flag and protective role; risk-increasing and risk-reducing actions are distinct; approved close and reduce-only paths do not depend on unrelated feeds; the server rechecks current state; degraded UI explains uncertainty without fabricating balances; recovery never replays a mutation.\n\n**Anti-pattern:** Disable the whole trading surface whenever any socket reconnects.\n\n**Why it fails:** A market-data or history blip prevents the user from cancelling or reducing a live position, increasing loss while the mutation backend may be healthy.\n\n**Bad example (illustrative):** disabled = socket.status !== 'connected' for open, cancel and close\n\n**Better example (illustrative):** policy = actionFreshnessPolicy.classify(action, targetOrderIntent); disabledReason = policy.evaluate(authoritativeHealth)\n\n**Legitimate exceptions:** If the mutation itself depends on stale client-computed data, block it until the contract is redesigned or freshness is restored.\n\n**Verification scenario:** Degrade each stream, then cancel an opening order, cancel a protective reduce-only stop, close and reduce; verify intent-specific sourced policy rather than treating every cancel as risk reduction."
+    }
+  ]
+}

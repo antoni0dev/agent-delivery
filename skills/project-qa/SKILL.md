@@ -41,6 +41,22 @@ These paths target an installed skill; in the source package use root `WORKFLOW.
 - Return test repairs to the owner. Do not modify or push the candidate during
   independent judgment. Test changes move the head and require affected evidence again.
 
+## Chain and wallet journeys
+
+- When the change signs, approves or submits on chain, cover the applicable failure
+  journeys: user rejection, wrong chain and a chain switch mid-flow, insufficient
+  allowance, pending, replaced (speed-up or cancel), dropped, reorg and RPC failure.
+  Each ends in a truthful, usable state with no duplicate submission.
+- Inert fixtures use a deterministic injected wallet: fixed accounts and chain ID,
+  scripted approve, reject and delay responses, a record of every signing and send
+  request, and failure on any unexpected request. Assert the signed payload matches
+  the intent the user confirmed.
+- Writes run on testnet only, with the dedicated QA wallets PROJECT.md references.
+  Stop if the configured chain ID is a mainnet.
+- New journey specs must be registered in the CI suite in the same change; return an
+  unregistered spec to the owner. A run that executes zero tests, or a requested spec
+  that contributes none, is a failure.
+
 ## Report acceptance
 
 - Record head/base, environment, actual steps/assertions, results and artifact references.

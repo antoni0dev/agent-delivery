@@ -325,7 +325,7 @@ Pack: `chain` (candidate). Topics: `chain`, `data`, `operations`, `backend`, `im
 
 ## Budget every per-block stage against the block clock
 
-A chain follower that falls behind never catches up on its own; its lag only grows, so the block interval is a hard budget: every per-block stage (fetch, trace, decode, enrich, publish) is a histogram whose p99 sits under the fastest served chain's block time with headroom. The node is a metered budget too: a small constant number of requests per block (say block, receipts, traces), no per-transaction RPC, no refetch of data the block carried, and a written ceiling for anything extra. Queues are bounded and never lossy, with exported depth and source lag. Refines core card operations-load-and-tail-latency.
+A chain follower slower than the block interval never catches up; its lag only grows, so the block interval is a hard budget: every per-block stage (fetch, trace, decode, enrich, publish) is a histogram whose p99 sits under the fastest served chain's block time with headroom. The node is a metered budget too: a small constant number of requests per block (say block, receipts, traces), no per-transaction RPC, no refetch of data the block carried, and a written ceiling for anything extra. Queues are bounded and never lossy, with exported depth and source lag. Refines core card operations-load-and-tail-latency.
 
 **Apply when:** Adding a stage or RPC call to a block path, putting a faster chain on a shared core, or reviewing indexer performance.
 
@@ -1319,7 +1319,7 @@ Scope the key by user and endpoint, hash a canonical serialization of the parsed
 
 **Boundary notes:** The payload hash binds the client key to its first payload; it is never the dedupe key, so identical genuine orders with different keys both execute. Require the key where a retry could repeat a fan-out.
 
-**Checks:** a claim that expired between the lost race and the read counts as in flight, not free; only 2xx results are stored and an error releases the claim, so the handler must not error after a side effect (see execution-no-whole-request-error-after-effect); a failed result write is alerted, because the key becomes runnable again when the claim expires; the handler finishes within an internal deadline below the request timeout, so a request cancelled after its side effect cannot leave a pending claim that later runs again; replay returns the stored status and body verbatim.
+**Checks:** a claim that expired between the lost race and the read counts as in flight, not free; only 2xx results are stored and an error releases the claim, so the handler must not error after a side effect (see execution-no-whole-request-error-after-effect); a failed result write is alerted, because the key becomes runnable again when the claim expires; the side effect and its result write run so neither a timeout nor a client disconnect can cancel them in between, because an unresolved pending claim becomes runnable again when it expires; replay returns the stored status and body verbatim.
 
 **Anti-pattern:** Check-then-set in two calls, run the handler when the store is unreachable, or accept a key not bound to its payload.
 
@@ -1513,11 +1513,11 @@ Pack: `execution` (candidate). Topics: `backend`, `chain`, `signing`, `execution
 
 ## Settle only on an observed chain receipt
 
-A send that returns OK is not settlement: an accepted send with an unmoved nonce was never in the mempool. Confirm from the chain against a baseline captured before the send (block height lower bound, pre-send balance), require a successful receipt, measure the credited amount from transfer logs emitted by the expected token contract, net of transfers out of the recipient in the same transaction, and verify the intended state change happened. Zero credit is a fault, and downstream legs spend the measured amount, never a quoted or reported figure.
+A send that returns OK is not settlement: an accepted send with an unmoved nonce was never in the mempool. Confirm from the chain against a baseline captured before the send (block height lower bound, pre-send balance), require a successful receipt, measure the credited amount from transfer logs emitted by the expected token contract, summing inflows to and outflows from the recipient separately and netting them, and verify the intended state change happened. A net credit of zero or less is a fault, and downstream legs spend the measured amount, never a quoted or reported figure.
 
 **Apply when:** a step advances a workflow, credits a user or sizes the next leg after a transaction or bridge fill.
 
-**Checks:** the baseline is captured before sending; a reverted receipt fails the step; the credited amount derives purely from the receipt and ignores logs from any other emitter, so a resume re-derives the same value; zero net credit raises an error; the transaction hash is recorded before any amount check that can fail, so the record never denies a real transfer; delegations and approvals are verified by reading resulting state, since a mined transaction can be a silent no-op; replica lag after a receipt is bounded by a deadline.
+**Checks:** the baseline is captured before sending; a reverted receipt fails the step; the credited amount derives purely from the receipt and ignores logs from any other emitter, so a resume re-derives the same value; a net credit of zero or less raises an error; the transaction hash is recorded before any amount check that can fail, so the record never denies a real transfer; delegations and approvals are verified by reading resulting state, since a mined transaction can be a silent no-op; replica lag after a receipt is bounded by a deadline.
 
 **Anti-pattern:** Mark a step done when the RPC accepts the transaction or a provider reports a fill.
 
@@ -1532,7 +1532,7 @@ await rpc.send(tx); step.done = true; next.amountIn = quote.amountOut
 **Better example (illustrative):**
 
 ```text
-const r = await waitReceipt(hash); requireSuccess(r); const got = netCredit(r, token, recipient); if (got === 0n) fail(); next.amountIn = got
+const r = await waitReceipt(hash); requireSuccess(r); const got = netCredit(r, token, recipient); if (got <= 0n) fail(); next.amountIn = got
 ```
 
 **Legitimate exceptions:** A third-party status may signal progress or completion where no chain-observable credit exists, but amounts used downstream still come from chain reads. Reporting-only deltas may be approximate if documented.
@@ -2003,7 +2003,7 @@ When the submitting request consumes a one-shot approval (signature, passkey, se
 
 **Apply when:** a flow collects an approval and then submits a withdrawal, swap or transfer, or a third party gains allowance over user funds.
 
-**Boundary notes:** if the signature already covers amount, recipient and min-out, re-quoting means re-signing, and the signed payload is the guarantee.
+**Boundary notes:** if the signature already covers amount, recipient and min-out, the signed min-out is the bound floor: a fresh quote at or above it spends the signature, and a worse one needs reconfirmation and a new signature.
 
 **Checks:** the terms shown at approval are the terms bound server-side; the post-approval re-quote uses the sourced tolerance against confirmed terms; a failed re-quote fails before dispatch; no error path calls approve again; the backend checks each request against the bound intent and exposes consumption or revocation; allowance amount and spender are recorded owner decisions.
 
@@ -2459,13 +2459,13 @@ Pack: `operations` (candidate). Topics: `release`, `operations`, `backend`, `pla
 
 ## Keep previews and deploys current, scoped and coupled
 
-Previews that need deploy credentials run only for trusted PRs: same repository, not draft, not from a bot. Untrusted code is built in an unprivileged job, and a separate privileged job deploys the resulting artifact without running PR code. Checking the PR file list through the API before checkout is a cost control that skips docs- or tests-only previews, not a security boundary; treat a truncated file list as needing a preview. A main-branch deploy re-checks that main has not moved before build, deploy and alias, and stops if it has. Surfaces that must match (an app and a separately deployed sign-in app) are coupled through a published build ref, and the deploy refuses on mismatch.
+Previews that need deploy credentials run only for trusted PRs: same repository and not from a bot; skipping drafts is a cost filter, not a trust signal. Fork and bot PRs get no secret-backed preview. For trusted PRs, building in an unprivileged job and deploying the artifact from a separate privileged job adds defense in depth. Checking the PR file list through the API before checkout is a cost control that skips docs- or tests-only previews, not a security boundary; treat a truncated file list as needing a preview. A main-branch deploy re-checks that main has not moved before build, deploy and alias, and stops if it has. Surfaces that must match (an app and a separately deployed sign-in app) are coupled through a published build ref, and the deploy refuses on mismatch.
 
 **Apply when:** Editing CI or CD workflows, adding a deploy target, or adding a second surface with a version dependency.
 
 **Boundary notes:** The CI build used for browser tests embeds mocks and test endpoints and is never the deployable artifact; the deployable build is made against the real environment and smoke-tested without rebuilding.
 
-**Checks:** Untrusted PRs never reach a job holding secrets, either through trust gating or an unprivileged build job; validation checkouts do not persist credentials; required production build variables fail the build when missing; build output is validated before deploy; preview concurrency is per PR and production is serialized; smoke tests hit real routes after deploy.
+**Checks:** Untrusted PRs never reach a job or environment holding secrets, and trusted previews build without deploy secrets in scope where possible; validation checkouts do not persist credentials; required production build variables fail the build when missing; build output is validated before deploy; preview concurrency is per PR and production is serialized; smoke tests hit real routes after deploy.
 
 **Anti-pattern:** Build untrusted PR code inside a job that holds deploy tokens, or deploy whatever commit the run started with.
 
@@ -2480,7 +2480,7 @@ On every pull_request event, forks included, check out the PR head and build it 
 **Better example (illustrative):**
 
 ```text
-Gate secret-holding previews to same-repository non-draft PRs, skip docs-only diffs via the API, and re-check the main SHA before deploy and alias.
+Gate secret-holding previews to same-repository, non-bot PRs, skip docs-only diffs via the API, and re-check the main SHA before deploy and alias.
 ```
 
 **Legitimate exceptions:** A repository whose contributors all have write access may build and deploy previews in one trusted job, provided fork and bot PRs never reach it. Which paths count as safe to skip is a team decision.

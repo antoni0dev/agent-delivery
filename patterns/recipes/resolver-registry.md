@@ -40,11 +40,14 @@ For a supported subset, derive the subset from a runtime list and validate unkno
 ```ts
 const quoteProviderKinds = ['alpha', 'gamma'] as const
 type QuoteProviderKind = (typeof quoteProviderKinds)[number]
+const quoteProviderKindSet: ReadonlySet<ProviderKind> = new Set(
+  quoteProviderKinds
+)
 
 export function isQuoteProviderKind(
   value: ProviderKind
 ): value is QuoteProviderKind {
-  return value === 'alpha' || value === 'gamma'
+  return quoteProviderKindSet.has(value)
 }
 ```
 

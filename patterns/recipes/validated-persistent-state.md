@@ -24,7 +24,7 @@ The adapter owns platform events, serialization transport, and snapshot caching.
 ## Hook factory
 
 ```ts
-import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react'
 
 type PersistentStateInput<Key extends string, Value> = {
   key: Key
@@ -40,15 +40,23 @@ export function createPersistentStateHook<Key extends string>(
     initialValue,
     codec,
   }: PersistentStateInput<Key, Value>) {
-    const [initial] = useState(initialValue)
+    const initialValues = useRef(new Map<Key, { value: Value }>())
+    let initialEntry = initialValues.current.get(key)
+
+    if (initialEntry === undefined) {
+      initialEntry = { value: initialValue() }
+      initialValues.current.set(key, initialEntry)
+    }
+
+    const initial = initialEntry.value
     const subscribe = useCallback(
       (listener: () => void) => storage.subscribe(key, listener),
-      [key]
+      [key, storage]
     )
-    const read = useCallback(
-      () => storage.get(key, codec) ?? initial,
-      [codec, initial, key]
-    )
+    const read = useCallback(() => {
+      const stored = storage.get(key, codec)
+      return stored === undefined ? initial : stored
+    }, [codec, initial, key, storage])
 
     const value = useSyncExternalStore(
       subscribe,
@@ -60,7 +68,7 @@ export function createPersistentStateHook<Key extends string>(
       if (storage.get(key, codec) === undefined) {
         storage.set(key, initial, codec)
       }
-    }, [codec, initial, key])
+    }, [codec, initial, key, storage])
 
     const setValue = (next: Value) => {
       storage.set(key, next, codec)
@@ -76,6 +84,10 @@ export function createPersistentStateHook<Key extends string>(
 ```
 
 Separate `setValue` and `updateValue` so a stored function can never be mistaken for an updater. Stabilize `subscribe` and snapshot functions only when the chosen React version or adapter lifecycle requires stable identities.
+
+Defaults are stored per key so an account or scope change cannot seed a new key
+with the previous key's value. Only `undefined` means absent; `null` remains a
+valid persisted value when the codec permits it.
 
 ## Versioned value
 
@@ -96,3 +108,4 @@ The codec should migrate supported older versions, reject future versions, and a
 - Subscription cleanup removes exactly the listener that was added.
 - Server rendering has a deterministic server snapshot.
 - Tests cover functional updates, validation correction, migration, and multi-subscriber updates.
+- Tests cover a mounted key change and a codec whose valid value includes `null`.

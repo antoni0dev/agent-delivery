@@ -66,6 +66,7 @@ export function useAsyncQueryTransform<Input, Output, Failure>({
       data: undefined,
       error: source.error,
       isPending: source.isPending,
+      isFetching: source.isFetching,
       isPlaceholderData: source.isPlaceholderData,
     }
   }
@@ -74,6 +75,7 @@ export function useAsyncQueryTransform<Input, Output, Failure>({
     data: transformed.data,
     error: source.error ?? transformed.error,
     isPending: source.isPending || transformed.isPending,
+    isFetching: source.isFetching || transformed.isFetching,
     isPlaceholderData:
       source.isPlaceholderData || transformed.isPlaceholderData,
   }

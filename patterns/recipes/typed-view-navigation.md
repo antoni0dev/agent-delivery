@@ -22,6 +22,45 @@ type ViewEntry<Map extends object> = {
 type NavigationState = {
   history: ViewEntry<ViewStateMap>[]
 }
+
+type NavigationAction<Map extends object> =
+  | { type: 'push'; entry: ViewEntry<Map> }
+  | { type: 'replace'; entry: ViewEntry<Map> }
+  | { type: 'reset'; entry: ViewEntry<Map> }
+  | { type: 'back'; steps: number }
+
+const unreachable = (value: never): never => {
+  throw new Error(`Unexpected navigation action: ${String(value)}`)
+}
+
+export function reduceNavigation<Map extends object>(
+  state: { history: ViewEntry<Map>[] },
+  action: NavigationAction<Map>
+): { history: ViewEntry<Map>[] } {
+  if (state.history.length === 0) {
+    throw new Error('Expected navigation history to contain a root entry')
+  }
+
+  if (action.type === 'push') {
+    return { history: [...state.history, action.entry] }
+  }
+
+  if (action.type === 'replace') {
+    return { history: [...state.history.slice(0, -1), action.entry] }
+  }
+
+  if (action.type === 'reset') {
+    return { history: [action.entry] }
+  }
+
+  if (action.type === 'back') {
+    const count = Math.max(0, Math.floor(action.steps))
+    const keep = Math.max(1, state.history.length - count)
+    return { history: state.history.slice(0, keep) }
+  }
+
+  return unreachable(action)
+}
 ```
 
 ```tsx
@@ -40,7 +79,6 @@ The navigation owner exposes explicit operations:
 - `replace(entry)` replaces only the top entry.
 - `reset(entry)` replaces the whole history.
 - `back(steps)` never removes the root entry.
-- `setCurrentState(updater)` updates only the top entry's state.
 
 Do not expose the raw history setter to feature components. The owner enforces root preservation and transition semantics.
 
@@ -54,6 +92,6 @@ Prefetch after the first useful paint, one module at a time during idle periods,
 
 - Every destination and payload is a compile-time valid pair.
 - Unknown persisted or external destinations are rejected before entering history.
-- Back never pops below root; reset and replace have distinct tests.
+- Push, replace, reset and back have distinct tests, and back never pops below root.
 - Direct entry, refresh, sharing, and browser history requirements were checked before choosing in-memory navigation.
 - Lazy-load failure, later retry, prefetch reuse, and error-boundary behavior are tested.

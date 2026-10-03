@@ -56,7 +56,7 @@ export function createStateContext<Value>(name: string) {
     children,
     initialValue,
   }: PropsWithChildren<{ initialValue: Value }>) {
-    const value = useState(initialValue)
+    const value = useState<Value>(() => initialValue)
     return <state.Provider value={value}>{children}</state.Provider>
   }
 

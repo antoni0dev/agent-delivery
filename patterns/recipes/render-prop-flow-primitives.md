@@ -39,7 +39,49 @@ export function ValueTransfer<Value>({
 `StepTransition` is the boolean version of `ValueTransfer`. `Opener` exposes `{ isOpen, open, close }` to a trigger render function and renders content only while open. Use a hook instead when only one local component needs the behavior.
 
 ```tsx
-import type { ComponentType, PropsWithChildren, ReactNode } from 'react'
+import {
+  type ComponentType,
+  type PropsWithChildren,
+  type ReactNode,
+  useState,
+} from 'react'
+
+type StepTransitionProps = {
+  from: (finish: () => void) => ReactNode
+  to: (back: () => void) => ReactNode
+}
+
+export function StepTransition({ from, to }: StepTransitionProps) {
+  const [isFinished, setIsFinished] = useState(false)
+  return <>{isFinished ? to(() => setIsFinished(false)) : from(() => setIsFinished(true))}</>
+}
+
+type OpenerProps = {
+  initialIsOpen?: boolean
+  trigger: (input: {
+    isOpen: boolean
+    open: () => void
+    close: () => void
+  }) => ReactNode
+  content: (close: () => void) => ReactNode
+}
+
+export function Opener({
+  initialIsOpen = false,
+  trigger,
+  content,
+}: OpenerProps) {
+  const [isOpen, setIsOpen] = useState(initialIsOpen)
+  const open = () => setIsOpen(true)
+  const close = () => setIsOpen(false)
+
+  return (
+    <>
+      {trigger({ isOpen, open, close })}
+      {isOpen ? content(close) : null}
+    </>
+  )
+}
 
 type WrapProps = {
   children: ReactNode

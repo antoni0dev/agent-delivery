@@ -21,9 +21,80 @@ export type EagerQuery<Value, Failure = unknown> = {
 Use named wrappers for the two modes instead of a boolean parameter:
 
 ```ts
+type MinimalQuery<Value, Failure> = {
+  data: Value | undefined
+  error: Failure | null
+  isPending: boolean
+  isFetching?: boolean
+}
+
+type CombineQueriesInput<Value, Output, Failure> = {
+  queries: readonly MinimalQuery<Value, Failure>[]
+  join: (values: readonly Value[]) => Output
+}
+
+export function combineQueriesStrict<Value, Output, Failure>({
+  queries,
+  join,
+}: CombineQueriesInput<Value, Output, Failure>): Query<
+  Output,
+  Failure | Error
+> {
+  const isPending = queries.some(query => query.isPending)
+  const isFetching = queries.some(query => query.isFetching)
+  const error = queries.find(query => query.error !== null)?.error ?? null
+  const values: Value[] = []
+
+  for (const query of queries) {
+    if (query.data === undefined) {
+      return { data: undefined, error, isPending, isFetching }
+    }
+
+    values.push(query.data)
+  }
+
+  const result = attempt(() => join(values))
+  return result.ok
+    ? { data: result.value, error, isPending, isFetching }
+    : { data: undefined, error: result.error, isPending, isFetching }
+}
+
+export function combineQueriesEager<Value, Output, Failure>({
+  queries,
+  join,
+}: CombineQueriesInput<Value, Output, Failure>): EagerQuery<
+  Output,
+  Failure | Error
+> {
+  const values: Value[] = []
+  const errors: Array<Failure | Error> = []
+
+  for (const query of queries) {
+    if (query.data !== undefined) values.push(query.data)
+    if (query.error !== null) errors.push(query.error)
+  }
+
+  if (values.length === 0) {
+    return {
+      data: undefined,
+      errors,
+      isPending: queries.some(query => query.isPending),
+    }
+  }
+
+  const result = attempt(() => join(values))
+  if (!result.ok) errors.push(result.error)
+
+  return {
+    data: result.ok ? result.value : undefined,
+    errors,
+    isPending: queries.some(query => query.isPending),
+  }
+}
+
 const overview = combineQueriesStrict({
-  queries: { profile, permissions },
-  join: ({ profile, permissions }) => ({ profile, permissions }),
+  queries: projectQueries,
+  join: projects => projects.flat(),
 })
 
 const visiblePrices = combineQueriesEager({
@@ -32,7 +103,10 @@ const visiblePrices = combineQueriesEager({
 })
 ```
 
-The shared implementation may use internal type machinery, but feature callers should receive exact inferred data types and should not assert that missing data exists.
+Use a record-based overload only when heterogeneous named inputs repeat often
+enough to justify its internal type machinery. Keep any required generic cast
+inside the tested shared utility; feature callers should not assert that
+missing data exists.
 
 ## Invalidation ownership
 

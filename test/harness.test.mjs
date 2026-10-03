@@ -16,6 +16,20 @@ test('optional knowledge check works from a checkout path containing spaces', t 
   assert.equal(result.status, 0, result.stderr);
 });
 
+test('pattern catalog validation rejects selector-breaking field shapes', t => {
+  const directory = mkdtempSync(join(tmpdir(), 'harness-pattern-catalog-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  for (const name of ['knowledge', 'patterns', 'scripts', 'WORKFLOW.md', 'templates', 'skills', 'docs'])
+    cpSync(join(root, name), join(directory, name), { recursive: true });
+  const catalogPath = join(directory, 'patterns/catalog.json');
+  const catalog = JSON.parse(readFileSync(catalogPath, 'utf8'));
+  catalog.patterns[0].topics = 'branching';
+  writeFileSync(catalogPath, JSON.stringify(catalog, null, 2) + '\n');
+  const result = spawnSync(process.execPath, [join(directory, 'scripts/check.mjs')], { encoding: 'utf8' });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /slug topics/);
+});
+
 function checkout(t) {
   const dir = mkdtempSync(join(tmpdir(), 'harness-test-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
@@ -113,7 +127,7 @@ for (const [client, folder] of [['codex', '.agents'], ['claude', '.claude'], ['c
     const repo = checkout(t);
     const result = spawnSync(process.execPath, [join(root, 'scripts/install.mjs'), '--repo', repo, '--client', client], { encoding: 'utf8' });
     assert.equal(result.status, 0, result.stderr);
-    for (const name of ['engineering-manager', 'engineering-knowledge', 'shape-linear-ticket', 'pr-audit', 'project-qa', 'quality-gates']) {
+    for (const name of ['engineering-manager', 'engineering-knowledge', 'engineering-patterns', 'shape-linear-ticket', 'pr-audit', 'project-qa', 'quality-gates']) {
       const skill = join(repo, folder, 'skills', name, 'SKILL.md');
       const content = readFileSync(skill, 'utf8');
       for (const match of content.matchAll(/\]\((\.\.\/[^)]+)\)/g))

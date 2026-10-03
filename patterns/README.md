@@ -20,7 +20,7 @@ Each recipe contains:
 
 - Fit and non-fit criteria.
 - A recommended public surface.
-- Copy-ready illustrative code.
+- Adaptation-ready illustrative code with named dependencies.
 - Adoption steps and verification cases.
 - Related audited decision cards.
 

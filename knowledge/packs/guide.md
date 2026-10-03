@@ -3972,7 +3972,7 @@ const outcomes = await closeTargets({ targets: positions.map(toReduceOnlyClose),
 
 **Verification scenario:** Three positions, the second close rejects: results read closed, rejected with reason, closed. A row close concurrent with close-all opens no exposure, and the rejected or trimmed second close is reported on its target. A lost response followed by the position leaving the stream is marked closed with no second request. Switching account mid-operation keeps the outcomes on the original account.
 
-**Automatable check:** Integration tests with per-target fault injection asserting no automatic resend per position, that every close carries reduce-only, and the per-target outcome list and the per-target outcome list.
+**Automatable check:** Integration tests with per-target fault injection asserting no automatic resend per position, that every close carries reduce-only, and the per-target outcome list.
 
 Pack: `perps` (candidate). Topics: `perps`, `execution`, `mutations`, `frontend`, `implementation`.
 
